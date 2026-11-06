@@ -7,7 +7,9 @@ const LAST_KEY = 'keys2worship:last';
 
 export const DEFAULT_SETTINGS = {
   notation: 'de',     // 'de' (H, Fis …) oder 'en' (B, F# …)
-  leftHand: true,     // Grundton mit der linken Hand anzeigen
+  hand: 'rechts',     // Übungsansicht: 'rechts' | 'links' | 'beide'
+  zoom: { rechts: 1, links: 1, beide: 0 }, // Anteil der echten Tastengröße (1 = 100 %), 0 = ganze Klaviatur
+  pxPerMm: null,      // eigene Kalibrierung (null = Schätzung nach Gerät)
   glideBeats: 1,      // wie viele Schläge vor dem Wechsel die Finger losgleiten
   sound: 'piano',     // 'piano' | 'rhodes' | 'off'
   volume: 0.8,

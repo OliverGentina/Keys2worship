@@ -2,7 +2,10 @@
 
 Eine Web-App fürs iPad (und iPhone), mit der man ohne Vorkenntnisse lernt, Lobpreislieder auf dem Klavier zu begleiten. Der Fokus liegt auf **fließenden Akkordwechseln mit möglichst wenig Handbewegung**.
 
-## Was die App kann (v0.2)
+## Was die App kann (v0.3)
+
+- **Echte Tastengröße & Zoom**: 100 % = Tastenbreite eines echten Klaviers (≈ 23,5 mm); der Ausschnitt läuft mit der Hand mit. Zoom mit −/+, „100 %“ antippen oder zwei Finger. Kleinste Stufe: ganze Klaviatur. Kalibrierung mit einer Bankkarte in den Einstellungen.
+- **Hand-Auswahl**: Rechte Hand (Standard, echte Größe), Linke Hand (Grundton, echte Größe) oder Beide (ganze Klaviatur, zoombar)
 
 - **Startbildschirm** wie in der Ambientpad-App: Schriftzug schreibt sich selbst, „Start“ schaltet den Ton frei (iOS braucht einen Tipp; Ton läuft auch bei Lautlos-Schalter), Versionsnummer
 

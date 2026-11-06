@@ -1,7 +1,7 @@
 import { planProgression, splitChords, parseChord, movesBetween, noteName, noteLabel, transposeSymbol,
   prefersFlats, keyIsEasy, candidateVoicings, fingering, FINGER_NAMES } from './music.js';
 import { SoundEngine, Transport } from './sound.js';
-import { Keyboard, FINGER } from './keyboard.js';
+import { Keyboard, FINGER, REAL_KEY_MM, estimatePxPerMm } from './keyboard.js';
 import * as store from './store.js';
 import { VERSION } from './version.js';
 import { initSplash } from './splash.js';
@@ -9,6 +9,10 @@ import { initSplash } from './splash.js';
 const app = document.getElementById('app');
 const engine = new SoundEngine();
 let settings = store.loadSettings();
+settings.zoom = Object.assign({ rechts: 1, links: 1, beide: 0 }, settings.zoom || {});
+const pxPerMm = () => settings.pxPerMm || estimatePxPerMm();
+const realKeyPx = () => pxPerMm() * REAL_KEY_MM;
+const withBass = (s) => [s.bass, ...s.notes];
 engine.setVolume(settings.volume);
 let cleanup = null; // räumt die aktuelle Ansicht auf (Metronom stoppen usw.)
 
@@ -64,7 +68,17 @@ function openSettings(onChange) {
           <option value="de" ${settings.notation === 'de' ? 'selected' : ''}>Deutsch (H, Fis, B)</option>
           <option value="en" ${settings.notation === 'en' ? 'selected' : ''}>Englisch (B, F#, Bb)</option>
         </select></label>
-      <label class="row"><span>Linke Hand (Grundton) zeigen</span><input type="checkbox" name="leftHand" ${settings.leftHand ? 'checked' : ''}></label>
+      <div class="calib">
+        <span>Echte Tastengröße kalibrieren</span>
+        <span class="muted small">Leg eine Bankkarte (8,56 cm breit) auf den Balken und stell ihn mit −/+ gleich lang ein.</span>
+        <div class="calib-bar" id="calibBar"></div>
+        <div class="row-gap">
+          <button type="button" class="icon-btn small" data-cal="-1" aria-label="Kürzer">−</button>
+          <button type="button" class="icon-btn small" data-cal="1" aria-label="Länger">+</button>
+          <button type="button" class="btn ghost" data-cal="0">Automatisch</button>
+          <span class="muted small" id="calibInfo"></span>
+        </div>
+      </div>
       <label class="row"><span>Finger gleiten los … Schläge vor dem Wechsel</span>
         <select name="glideBeats">${[1, 2, 3].map((n) => `<option ${settings.glideBeats === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       <label class="row"><span>Lautstärke</span><input type="range" name="volume" min="0" max="1" step="0.05" value="${settings.volume}"></label>
@@ -74,9 +88,20 @@ function openSettings(onChange) {
   const form = d.querySelector('form');
   form.addEventListener('input', () => {
     const f = new FormData(form);
-    setSettings({ notation: f.get('notation'), leftHand: !!f.get('leftHand'), glideBeats: +f.get('glideBeats'), volume: +f.get('volume') });
+    setSettings({ notation: f.get('notation'), glideBeats: +f.get('glideBeats'), volume: +f.get('volume') });
     onChange && onChange();
   });
+  const paintCalib = () => {
+    d.querySelector('#calibBar').style.width = (85.6 * pxPerMm()) + 'px';
+    d.querySelector('#calibInfo').textContent = settings.pxPerMm ? 'eigene Einstellung' : 'automatisch geschätzt';
+  };
+  form.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cal]'); if (!b) return;
+    const k = +b.dataset.cal;
+    setSettings({ pxPerMm: k === 0 ? null : pxPerMm() * (k > 0 ? 1.01 : 1 / 1.01) });
+    paintCalib(); onChange && onChange();
+  });
+  paintCalib();
   d.showModal();
 }
 
@@ -334,7 +359,19 @@ function viewPractice(id, q) {
     </section>
 
     ${P.invalid.length ? `<p class="warn">Nicht erkannt und übersprungen: ${P.invalid.map(esc).join(', ')}</p>` : ''}
-    <section class="kb-wrap" id="kbWrap"></section>
+    <section class="kb-area">
+      <div class="kb-tools">
+        <div class="seg small" role="group" aria-label="Hand" data-group="hand">
+          <button data-hand="rechts">Rechte Hand</button><button data-hand="links">Linke Hand</button><button data-hand="beide">Beide</button>
+        </div>
+        <div class="zoom" role="group" aria-label="Zoom">
+          <button class="icon-btn small" data-act="zoom-out" aria-label="Verkleinern">−</button>
+          <button class="btn ghost zoom-label" data-act="zoom-real" id="zoomLabel" aria-label="Echte Tastengröße"></button>
+          <button class="icon-btn small" data-act="zoom-in" aria-label="Vergrößern">+</button>
+        </div>
+      </div>
+      <div class="kb-wrap" id="kbWrap"></div>
+    </section>
     <footer class="legend hide-short">
       <div class="row-gap">${[1, 2, 3, 4, 5].map((n) => `<span class="lg"><span class="dot" style="background:${FINGER.bright[n]}">${n}</span>${FINGER_NAMES[n]}</span>`).join('')}</div>
       <div class="row-gap"><span class="lg"><span class="dot solid"></span>jetzt drücken</span><span class="lg"><span class="dot dashed"></span>als Nächstes</span><span class="lg"><span class="dot lh">L</span>linke Hand</span></div>
@@ -342,10 +379,29 @@ function viewPractice(id, q) {
   </div>`;
 
   const kbWrap = $('#kbWrap');
-  const wide = () => kbWrap.clientWidth >= 900;
-  const kb = new Keyboard(kbWrap, { lo: wide() ? 36 : 48, hi: 76, onKey: tapNote, keyName: (m) => noteLabel(m, notation, flats) });
-  const ro = new ResizeObserver(() => kb.setRange(wide() ? 36 : 48, 76));
+  const kb = new Keyboard(kbWrap, { lo: 36, hi: 76, onKey: tapNote, keyName: (m) => noteLabel(m, notation, flats), onZoom: (w) => setZoomPx(w) });
+
+  // Zoom: gespeichert als Anteil der echten Tastengröße, je Hand-Ansicht
+  function applyZoom() {
+    const z = settings.zoom[settings.hand] || 0;
+    kb.setKeyWidth(z ? realKeyPx() * z : 0);
+    const pct = Math.round(kb.W / realKeyPx() * 100);
+    const lbl = $('#zoomLabel');
+    lbl.textContent = (kb.W <= kb.fitWidth + 0.5 ? 'Alles · ' : '') + pct + ' %';
+    lbl.title = '100 % = echte Tastengröße';
+    lbl.classList.toggle('real', Math.abs(pct - 100) <= 2);
+  }
+  function setZoomPx(w) {
+    const fit = kb.fitWidth, real = realKeyPx();
+    w = Math.min(w, real * 1.4);
+    const z = w <= fit * 1.02 ? 0 : w / real;
+    settings.zoom = Object.assign({}, settings.zoom, { [settings.hand]: z });
+    setSettings({ zoom: settings.zoom });
+    applyZoom();
+  }
+  const ro = new ResizeObserver(() => applyZoom());
   ro.observe(kbWrap);
+  requestAnimationFrame(applyZoom);
 
   const transport = new Transport(engine, {
     getBpm: () => P.bpm,
@@ -355,7 +411,7 @@ function viewPractice(id, q) {
       engine.click(time, level, settings.sound === 'off' ? 0.25 : 0.12);
       if (beat === 0 && settings.sound !== 'off' && N()) {
         const s = P.steps[stepAt(bar)];
-        const notes = settings.leftHand ? [s.bass, ...s.notes] : s.notes;
+        const notes = withBass(s);
         engine.chord(voice(), notes, time, 0.24, bpb * 60 / P.bpm);
       }
     },
@@ -401,7 +457,7 @@ function viewPractice(id, q) {
       P.idx = target; P.glide = false; update();
       if (settings.sound !== 'off') {
         const s = P.steps[target];
-        engine.chord(voice(), settings.leftHand ? [s.bass, ...s.notes] : s.notes, null, 0.24, 3 * 60 / P.bpm);
+        engine.chord(voice(), withBass(s), null, 0.24, 3 * 60 / P.bpm);
       }
     }, P.glideDur + 30);
   }
@@ -410,7 +466,7 @@ function viewPractice(id, q) {
     P.idx = (i + N()) % N(); P.pair = P.idx; P.glide = false;
     if (!P.playing && settings.sound !== 'off' && N()) {
       const s = P.steps[P.idx];
-      engine.chord(voice(), settings.leftHand ? [s.bass, ...s.notes] : s.notes, null, 0.24, 2.5 * 60 / P.bpm);
+      engine.chord(voice(), withBass(s), null, 0.24, 2.5 * 60 / P.bpm);
     }
     restartIfPlaying();
   }
@@ -423,6 +479,7 @@ function viewPractice(id, q) {
   function update() {
     if (!N()) { kb.update({ cur: null, next: null }); return; }
     const aids = P.mode !== 'ohne';
+    const showRH = settings.hand !== 'links', showLH = settings.hand !== 'rechts';
     const cur = P.steps[P.idx], nIdx = nextOf(P.idx), next = P.steps[nIdx];
     // Leiste
     $$('.chord-card').forEach((c) => {
@@ -435,20 +492,27 @@ function viewPractice(id, q) {
     if (curCard) curCard.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
     // Jetzt / Danach
     $('#curName').textContent = cur.symbol;
-    $('#curInfo').textContent = cur.inversionName + (settings.leftHand ? ` · links ${noteName(cur.bass, notation, flats)}` : '');
+    $('#curInfo').textContent = (showRH ? cur.inversionName : 'Grundton') + (showLH ? ` · links ${noteName(cur.bass, notation, flats)}` : '');
     $('#curTones').textContent = cur.tones;
     $('#nextName').textContent = next.symbol;
     // Bewegungen
     const mv = movesBetween(cur, next);
     const moving = mv.filter((m) => m.delta !== 0).length, stay = 3 - moving;
     $('#movesTitle').textContent = `So wechselst du: ${cur.symbol} → ${next.symbol}`;
-    $('#movesSummary').textContent = `${moving} ${moving === 1 ? 'Finger bewegt sich' : 'Finger bewegen sich'}${stay ? `, ${stay} ${stay === 1 ? 'bleibt' : 'bleiben'} liegen` : ''}`;
-    $('#moves').innerHTML = aids ? mv.map((m) => {
+    $('#movesSummary').textContent = settings.hand === 'links'
+      ? (next.bass === cur.bass ? 'Linke Hand bleibt liegen' : 'Linke Hand wechselt den Grundton')
+      : `${moving} ${moving === 1 ? 'Finger bewegt sich' : 'Finger bewegen sich'}${stay ? `, ${stay} ${stay === 1 ? 'bleibt' : 'bleiben'} liegen` : ''}`;
+    const lhLine = () => {
+      const d = next.bass - cur.bass, k = Math.abs(d);
+      if (!d) return `<div class="mv"><span class="dot lh">L</span><span class="mv-t">Linke Hand bleibt auf ${noteName(cur.bass, notation, flats)}</span><span class="small accent-text">nicht bewegen</span></div>`;
+      return `<div class="mv"><span class="dot lh">L</span><span class="mv-t">Linke Hand: ${noteName(cur.bass, notation, flats)} → ${noteName(next.bass, notation, flats)}</span><span class="small muted">${k} ${k === 1 ? 'Taste' : 'Tasten'} nach ${d > 0 ? 'rechts' : 'links'} · kleiner Finger</span></div>`;
+    };
+    $('#moves').innerHTML = aids ? (showRH ? mv : []).map((m) => {
       if (m.delta === 0) return `<div class="mv"><span class="dot" style="background:${FINGER.bright[m.fingerFrom]}">${m.fingerFrom}</span><span class="mv-t">${FINGER_NAMES[m.fingerFrom]} bleibt auf ${noteName(m.from, notation, flats)}</span><span class="small accent-text">nicht bewegen</span></div>`;
       const k = Math.abs(m.delta);
       const sub = `${k} ${k === 1 ? 'Taste' : 'Tasten'} nach ${m.delta > 0 ? 'rechts' : 'links'}${m.fingerFrom !== m.finger ? ` · statt Finger ${m.fingerFrom}` : ''}`;
       return `<div class="mv"><span class="dot" style="background:${FINGER.bright[m.finger]}">${m.finger}</span><span class="mv-t">${FINGER_NAMES[m.finger]}: ${noteName(m.from, notation, flats)} → ${noteName(m.to, notation, flats)}</span><span class="small muted">${sub}</span></div>`;
-    }).join('') : `<p class="muted">Ohne Hilfe: Spiel ${esc(cur.symbol)} und ${esc(next.symbol)} aus dem Kopf. Wähle „Liedmodus“, um die Fingersätze wieder zu sehen.</p>`;
+    }).join('') + (showLH ? lhLine() : '') : `<p class="muted">Ohne Hilfe: Spiel ${esc(cur.symbol)} und ${esc(next.symbol)} aus dem Kopf. Wähle „Liedmodus“, um die Fingersätze wieder zu sehen.</p>`;
     // Metronom
     $('#beats').innerHTML = Array.from({ length: bpb }, (_, i) => `<span class="beat ${i === 0 || (bpb === 6 && i === 3) ? 'big' : ''} ${P.playing && i === P.beat ? (i === 0 ? 'on accent' : 'on') : ''}"></span>`).join('');
     $('#count').textContent = P.glide ? 'Finger rutschen …' : P.playing ? `Wechsel in ${bpb - P.beat}` : 'Bereit';
@@ -462,7 +526,9 @@ function viewPractice(id, q) {
     $$('[data-group=mode] button').forEach((b) => b.setAttribute('aria-pressed', String(P.mode === b.dataset.mode)));
     $$('[data-group=sound] button').forEach((b) => b.setAttribute('aria-pressed', String(settings.sound === b.dataset.sound)));
     // Klaviatur
-    kb.update({ cur, next: N() > 1 ? next : null, glide: P.glide, dur: P.glideDur, aids, showLH: settings.leftHand });
+    $$('[data-group=hand] button').forEach((b) => b.setAttribute('aria-pressed', String(settings.hand === b.dataset.hand)));
+    kb.update({ cur, next: N() > 1 ? next : null, glide: P.glide, dur: P.glideDur, aids, showRH, showLH,
+      focus: settings.hand === 'rechts' ? 'rh' : settings.hand === 'links' ? 'lh' : 'both' });
   }
 
   app.onclick = (e) => {
@@ -472,9 +538,10 @@ function viewPractice(id, q) {
     if (!b) return;
     if (b.dataset.sec != null) { P.sec = b.dataset.sec === 'all' ? 'all' : +b.dataset.sec; P.idx = 0; P.pair = 0; computeSteps(); renderStrip(); return restartIfPlaying(); }
     if (b.dataset.mode) { P.mode = b.dataset.mode; P.pair = P.idx; return restartIfPlaying(); }
+    if (b.dataset.hand) { setSettings({ hand: b.dataset.hand }); update(); return applyZoom(); }
     if (b.dataset.sound) {
       setSettings({ sound: b.dataset.sound });
-      if (b.dataset.sound !== 'off' && !P.playing && N()) { const s = P.steps[P.idx]; engine.chord(voice(), settings.leftHand ? [s.bass, ...s.notes] : s.notes, null, 0.24, 2); }
+      if (b.dataset.sound !== 'off' && !P.playing && N()) { const s = P.steps[P.idx]; engine.chord(voice(), withBass(s), null, 0.24, 2); }
       return update();
     }
     switch (b.dataset.act) {
@@ -483,7 +550,10 @@ function viewPractice(id, q) {
       case 'prev': return jump(P.idx - 1);
       case 'slower': P.bpm = Math.max(30, P.bpm - 4); return update();
       case 'faster': P.bpm = Math.min(200, P.bpm + 4); return update();
-      case 'settings': return openSettings(() => { update(); });
+      case 'zoom-in': return setZoomPx(kb.W * 1.15);
+      case 'zoom-out': return setZoomPx(kb.W / 1.15);
+      case 'zoom-real': return setZoomPx(realKeyPx());
+      case 'settings': return openSettings(() => { applyZoom(); update(); });
     }
   };
   const onKey = (e) => {
