@@ -4,7 +4,7 @@ Eine Web-App fürs iPad (und iPhone), mit der man ohne Vorkenntnisse lernt, Lobp
 
 ## Was die App kann (v0.3)
 
-- **Echte Tastengröße & Zoom**: 100 % = Tastenbreite eines echten Klaviers (≈ 23,5 mm); der Ausschnitt läuft mit der Hand mit. Zoom mit −/+, „100 %“ antippen oder zwei Finger. Kleinste Stufe: ganze Klaviatur. Kalibrierung mit einer Bankkarte in den Einstellungen.
+- **Echte Tastengröße & Zoom**: 100 % = Tastenbreite eines echten Klaviers (≈ 23,5 mm); der Ausschnitt läuft mit der Hand mit. Zoom nur mit −/+ oder „100 %“ antippen (mehrere Finger auf der Klaviatur sind ein Akkord, kein Zoom). Kleinste Stufe: ganze Klaviatur. Kalibrierung mit einer Bankkarte in den Einstellungen.
 - **Hand-Auswahl**: Rechte Hand (Standard, echte Größe), Linke Hand (Grundton, echte Größe) oder Beide (ganze Klaviatur, zoombar)
 
 - **Startbildschirm** wie in der Ambientpad-App: Schriftzug schreibt sich selbst, „Start“ schaltet den Ton frei (iOS braucht einen Tipp; Ton läuft auch bei Lautlos-Schalter), Versionsnummer

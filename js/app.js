@@ -379,7 +379,7 @@ function viewPractice(id, q) {
   </div>`;
 
   const kbWrap = $('#kbWrap');
-  const kb = new Keyboard(kbWrap, { lo: 36, hi: 76, onKey: tapNote, keyName: (m) => noteLabel(m, notation, flats), onZoom: (w) => setZoomPx(w) });
+  const kb = new Keyboard(kbWrap, { lo: 36, hi: 76, onKey: tapNote, keyName: (m) => noteLabel(m, notation, flats) });
 
   // Zoom: gespeichert als Anteil der echten Tastengröße, je Hand-Ansicht
   function applyZoom() {

@@ -25,11 +25,11 @@ function el(tag, cls, parent) {
 export class Keyboard {
   /**
    * @param {HTMLElement} root  Container
-   * @param {object} opts { lo, hi (MIDI, lo = ein C), arrows, labels, onKey(midi), keyName(midi), onZoom(scale) }
+   * @param {object} opts { lo, hi (MIDI, lo = ein C), arrows, labels, onKey(midi), keyName(midi) }
    */
   constructor(root, opts = {}) {
     this.root = root;
-    this.opts = Object.assign({ lo: 36, hi: 76, arrows: true, labels: true, onKey: null, keyName: (m) => String(m), onZoom: null }, opts);
+    this.opts = Object.assign({ lo: 36, hi: 76, arrows: true, labels: true, onKey: null, keyName: (m) => String(m) }, opts);
     this.view = { cur: null, next: null, glide: false, dur: 0, aids: true, showLH: true, showRH: true, focus: 'rh' };
     this.keyWidth = 0;      // gewünschte Tastenbreite in px (0 = ganze Klaviatur einpassen)
     this.offset = 0;
@@ -70,7 +70,6 @@ export class Keyboard {
       b.setAttribute('aria-label', this.opts.keyName(m));
       if (this.opts.labels && !isBlack(m) && m % 12 === 0) b.textContent = this.opts.keyName(m);
       b.addEventListener('pointerdown', (e) => {
-        if (this.pinching) return;
         e.preventDefault(); b.classList.add('down'); this.opts.onKey && this.opts.onKey(m);
       });
       const up = () => b.classList.remove('down');
@@ -267,18 +266,13 @@ export class Keyboard {
     if (showLH && this.inRange(cur.bass) && this.inRange(next.bass)) arrow(cur.bass, next.bass, LH.bright, 'L', showRH ? 1 : 1);
   }
 
-  // Zwei-Finger-Zoom: Safari (iPad) meldet "gesturechange" mit e.scale; am Rechner Strg + Mausrad
+  // Mehrere Finger gleichzeitig = Akkord, keine Zoom-Geste: Safaris Pinch-Zoom auf der Klaviatur abschalten.
+  // Der Zoom wird nur über die −/+-Regler bzw. die Einstellungen geändert.
   bindPinch() {
-    let startW = 0;
-    const apply = (w) => { this.opts.onZoom && this.opts.onZoom(w); };
-    this.viewport.addEventListener('gesturestart', (e) => { e.preventDefault(); this.pinching = true; startW = this.W; });
-    this.viewport.addEventListener('gesturechange', (e) => { e.preventDefault(); apply(startW * e.scale); });
-    this.viewport.addEventListener('gestureend', (e) => { e.preventDefault(); setTimeout(() => { this.pinching = false; }, 50); });
-    this.viewport.addEventListener('wheel', (e) => {
-      if (!e.ctrlKey) return;
-      e.preventDefault();
-      apply(this.W * Math.exp(-e.deltaY * 0.01));
-    }, { passive: false });
+    const block = (e) => e.preventDefault();
+    for (const t of ['gesturestart', 'gesturechange', 'gestureend']) this.viewport.addEventListener(t, block);
+    this.viewport.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+    this.viewport.addEventListener('dblclick', block);
   }
 }
 
