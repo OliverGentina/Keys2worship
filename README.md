@@ -2,7 +2,9 @@
 
 Eine Web-App fürs iPad (und iPhone), mit der man ohne Vorkenntnisse lernt, Lobpreislieder auf dem Klavier zu begleiten. Der Fokus liegt auf **fließenden Akkordwechseln mit möglichst wenig Handbewegung**.
 
-## Was die App kann (v0.1)
+## Was die App kann (v0.2)
+
+- **Startbildschirm** wie in der Ambientpad-App: Schriftzug schreibt sich selbst, „Start“ schaltet den Ton frei (iOS braucht einen Tipp; Ton läuft auch bei Lautlos-Schalter), Versionsnummer
 
 - **Übungsansicht** mit großer Klaviatur (iPad quer: C2–E5, iPhone quer: C3–E5)
   - Fingernummern direkt auf den Tasten (1 = Daumen … 5 = kleiner Finger), jeder Finger mit eigener Farbe

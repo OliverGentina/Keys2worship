@@ -3,6 +3,8 @@ import { planProgression, splitChords, parseChord, movesBetween, noteName, noteL
 import { SoundEngine, Transport } from './sound.js';
 import { Keyboard, FINGER } from './keyboard.js';
 import * as store from './store.js';
+import { VERSION } from './version.js';
+import { initSplash } from './splash.js';
 
 const app = document.getElementById('app');
 const engine = new SoundEngine();
@@ -27,7 +29,7 @@ const icon = {
 };
 const beatsPerBar = (meter) => ({ '3/4': 3, '6/8': 6 })[meter] || 4;
 const voice = () => (settings.sound === 'rhodes' ? 'rhodes' : 'piano');
-const tapNote = (m) => engine.note(voice(), m, null, 0.3, 1.4);
+const tapNote = (m) => { if (!engine.running) engine.unlock(); engine.note(voice(), m, null, 0.3, 1.4); };
 
 function setSettings(patch) {
   settings = Object.assign({}, settings, patch);
@@ -66,6 +68,7 @@ function openSettings(onChange) {
       <label class="row"><span>Finger gleiten los … Schläge vor dem Wechsel</span>
         <select name="glideBeats">${[1, 2, 3].map((n) => `<option ${settings.glideBeats === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       <label class="row"><span>Lautstärke</span><input type="range" name="volume" min="0" max="1" step="0.05" value="${settings.volume}"></label>
+      <p class="muted small">Keys2Worship · Version ${VERSION} · Ton: ${engine.running ? 'aktiv' : 'gesperrt – „Start“ bzw. ▶ antippen'}</p>
       <div class="sheet-actions"><button class="btn primary" value="ok">Fertig</button></div>
     </form>`;
   const form = d.querySelector('form');
@@ -134,6 +137,7 @@ function viewHome() {
       <span class="eyebrow">Bald</span>
       <p class="muted">Lieder und Tonarten direkt aus <strong>Planning Center</strong> und <strong>Chara Technics</strong> übernehmen.</p>
     </section>
+    <p class="app-footer">Keys2Worship · Version ${VERSION}</p>
   </div>`;
   $('[data-act=settings]').onclick = () => openSettings(() => viewHome());
 }
@@ -474,8 +478,8 @@ function viewPractice(id, q) {
       return update();
     }
     switch (b.dataset.act) {
-      case 'play': engine.ensure(); return P.playing ? stop() : start();
-      case 'next': engine.ensure(); return P.playing ? jump(nextOf(P.idx)) : stepManually();
+      case 'play': engine.unlock(); return P.playing ? stop() : start();
+      case 'next': engine.unlock(); return P.playing ? jump(nextOf(P.idx)) : stepManually();
       case 'prev': return jump(P.idx - 1);
       case 'slower': P.bpm = Math.max(30, P.bpm - 4); return update();
       case 'faster': P.bpm = Math.min(200, P.bpm + 4); return update();
@@ -484,7 +488,7 @@ function viewPractice(id, q) {
   };
   const onKey = (e) => {
     if (e.target.closest('input, select, textarea')) return;
-    if (e.code === 'Space') { e.preventDefault(); engine.ensure(); P.playing ? stop() : start(); }
+    if (e.code === 'Space') { e.preventDefault(); engine.unlock(); P.playing ? stop() : start(); }
     if (e.code === 'ArrowRight') { P.playing ? jump(nextOf(P.idx)) : stepManually(); }
     if (e.code === 'ArrowLeft') jump(P.idx - 1);
   };
@@ -572,6 +576,24 @@ function viewLibrary() {
 
 // ---------- Start ----------
 route();
+initSplash({
+  engine,
+  version: VERSION,
+  // Kurzer, leiser Akkord als Bestätigung, dass der Ton jetzt funktioniert
+  onStart: () => { if (settings.sound !== 'off') engine.chord(voice(), [55, 59, 62, 67], null, 0.16, 1.6, 0.06); },
+});
+
+// Updates: neue Version wird beim nächsten Öffnen automatisch geladen (nicht mitten im Üben)
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+    .then((reg) => {
+      reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+    })
+    .catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;
+    if (!document.querySelector('.practice') || !document.getElementById('playBtn')?.getAttribute('aria-label')?.includes('anhalten')) location.reload();
+  });
 }

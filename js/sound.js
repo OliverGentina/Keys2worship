@@ -1,6 +1,18 @@
 // Klangerzeugung mit der Web Audio API: Klavier, Rhodes-ähnliches E-Piano und Metronom-Klick.
 // Alles wird im Browser synthetisiert – keine Sounddateien nötig, funktioniert offline.
 
+/** 1 Sekunde Stille als WAV (für die iOS-Ton-Freischaltung). */
+function silentWav() {
+  const rate = 8000, n = rate, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n, true); str(8, 'WAVE'); str(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  str(36, 'data'); v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128); // 8-Bit-Stille
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
 export class SoundEngine {
   constructor() {
     this.ac = null;
@@ -11,13 +23,42 @@ export class SoundEngine {
   /** AudioContext erst bei einer Nutzeraktion starten (iOS verlangt das). */
   ensure() {
     if (!this.ac) {
+      // iOS 17+: als "Wiedergabe" einstufen → Ton auch bei Lautlos-Schalter/Stummmodus
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* älteres iOS */ }
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
-      this.ac = new AC({ latencyHint: 'interactive' });
+      try { this.ac = new AC({ latencyHint: 'interactive' }); } catch { this.ac = new AC(); }
       this.build();
     }
-    if (this.ac.state === 'suspended') this.ac.resume();
+    if (this.ac.state === 'suspended' || this.ac.state === 'interrupted') this.ac.resume().catch(() => {});
     return this.ac;
+  }
+
+  get running() { return !!this.ac && this.ac.state === 'running'; }
+
+  /**
+   * Ton freischalten – muss direkt in einem Tipp/Klick aufgerufen werden.
+   * Spielt einen unhörbaren Puffer und startet eine stille <audio>-Schleife: Dadurch läuft der Ton
+   * auf iPad/iPhone über den Medienkanal (statt Klingelton-Kanal), auch bei älteren iOS-Versionen.
+   */
+  unlock() {
+    const ac = this.ensure();
+    if (!ac) return;
+    try {
+      const b = ac.createBuffer(1, 1, 22050), s = ac.createBufferSource();
+      s.buffer = b; s.connect(ac.destination); s.start(0);
+    } catch { /* egal */ }
+    try {
+      if (!this.silentEl) {
+        this.silentEl = document.createElement('audio');
+        this.silentEl.setAttribute('playsinline', '');
+        this.silentEl.loop = true;
+        this.silentEl.src = URL.createObjectURL(silentWav());
+        this.silentEl.volume = 0.01;
+      }
+      const p = this.silentEl.play();
+      if (p && p.catch) p.catch(() => {});
+    } catch { /* egal */ }
   }
 
   get now() { return this.ac ? this.ac.currentTime : 0; }
