@@ -28,6 +28,7 @@ const icon = {
   play: '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>',
   pause: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
   speaker: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>',
+  mute: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>',
   gear: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>',
   arrow: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
   x: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
@@ -74,7 +75,7 @@ function openSettings(onChange, startPage = 'main') {
         <small>${pco.isConnected() ? `Verbunden${pco.userName() ? ' als ' + esc(pco.userName()) : ''} · Setlist & Lieder` : 'Setlist laden, Lieder holen'}</small></span><span class="mc">›</span></button>
       <div class="menu">
         <button class="mrow" data-go="keys"><span class="mi">🎹</span><span class="mt"><b>Klaviatur</b><small>${HAND_NAMES[settings.hand]} · ${pct(settings.zoom[settings.hand])}</small></span><span class="mc">›</span></button>
-        <button class="mrow" data-go="metro"><span class="mi">♩</span><span class="mt"><b>Metronom &amp; Gleiten</b><small>Finger gleiten ${settings.glideBeats} ${settings.glideBeats === 1 ? 'Schlag' : 'Schläge'} vor dem Wechsel</small></span><span class="mc">›</span></button>
+        <button class="mrow" data-go="metro"><span class="mi">♩</span><span class="mt"><b>Metronom &amp; Gleiten</b><small>Klick ${settings.click !== false ? 'an' : 'aus'} · Finger gleiten ${settings.glideBeats} ${settings.glideBeats === 1 ? 'Schlag' : 'Schläge'} vorher</small></span><span class="mc">›</span></button>
         <button class="mrow" data-go="sound"><span class="mi">🎚</span><span class="mt"><b>Klang</b><small>${SOUND_NAMES[settings.sound]} · ${Math.round(settings.volume * 100)} %</small></span><span class="mc">›</span></button>
         <button class="mrow" data-go="notation"><span class="mi">Aa</span><span class="mt"><b>Notenschrift</b><small>${settings.notation === 'de' ? 'Deutsch (H, Fis, B)' : 'Englisch (B, F#, Bb)'}</small></span><span class="mc">›</span></button>
         <a class="mrow" href="anleitung.html"><span class="mi">📖</span><span class="mt"><b>Anleitung</b><small>Schritt für Schritt mit Bildern</small></span><span class="mc">›</span></a>
@@ -121,6 +122,9 @@ function openSettings(onChange, startPage = 'main') {
         <span class="field-label">Finger gleiten los …</span>
         <div class="seg" role="group" aria-label="Gleiten">${[1, 2, 3].map((n) => `<button data-glide="${n}" aria-pressed="${settings.glideBeats === n}">${n} ${n === 1 ? 'Schlag' : 'Schläge'} vorher</button>`).join('')}</div>
         <p class="small muted">So lange vor dem Akkordwechsel wandern die Fingernummern zur nächsten Taste. Am Anfang lieber 2 oder 3 Schläge – dann hast du mehr Zeit.</p>
+      </div>
+      <div class="group">
+        <label class="trow"><input type="checkbox" id="clickOn" ${settings.click !== false ? 'checked' : ''}><span><b>Klick hörbar</b><small>Aus: Das Metronom zählt nur sichtbar mit, Akkorde erklingen weiter.</small></span></label>
       </div>
       <p class="small muted">Tempo und Taktart stellst du pro Lied im Lied-Editor ein; Lieder aus Planning Center bringen sie mit.</p>` },
 
@@ -198,6 +202,7 @@ function openSettings(onChange, startPage = 'main') {
   d.oninput = (e) => {
     if (e.target.id === 'vol') { setSettings({ volume: +e.target.value }); e.target.previousElementSibling.textContent = `Lautstärke · ${Math.round(settings.volume * 100)} %`; changed(); }
     if (e.target.id === 'pcoClient') pco.setClientId(e.target.value);
+    if (e.target.id === 'clickOn') { setSettings({ click: e.target.checked }); changed(); }
   };
   render();
   if (!d.open) d.showModal();
@@ -553,6 +558,8 @@ function viewPractice(id, q) {
     const plan = planProgression(syms, notation, flats);
     P.invalid = plan.filter((s) => s.invalid).map((s) => s.symbol);
     P.steps = plan.filter((s) => !s.invalid);
+    const rh = P.steps.flatMap((x) => x.notes), lh = P.steps.map((x) => x.bass);
+    P.frame = P.steps.length ? { rh: [Math.min(...rh), Math.max(...rh)], lh: [Math.min(...lh), Math.max(...lh)] } : null;
     P.idx = Math.min(P.idx, Math.max(0, P.steps.length - 1));
   }
   computeSteps();
@@ -607,7 +614,9 @@ function viewPractice(id, q) {
             <button data-sound="off">Aus</button><button data-sound="piano">Klavier</button><button data-sound="rhodes">Rhodes</button>
           </div>
         </div>
-        <div class="metro-row"><div class="beats" id="beats" aria-hidden="true"></div><strong class="small" id="count" aria-live="polite"></strong></div>
+        <div class="metro-row"><div class="beats" id="beats" aria-hidden="true"></div>
+          <button class="click-btn" data-act="click" id="clickBtn"></button>
+          <strong class="small" id="count" aria-live="polite"></strong></div>
         <div class="metro-row">
           <div class="row-gap">
             <button class="icon-btn" data-act="slower" aria-label="Langsamer">−</button>
@@ -625,6 +634,10 @@ function viewPractice(id, q) {
         <div class="seg small" role="group" aria-label="Hand" data-group="hand">
           <button data-hand="rechts">Rechte Hand</button><button data-hand="links">Linke Hand</button><button data-hand="beide">Beide</button>
         </div>
+        <div class="row-gap bk-tools">
+          <button class="btn ghost small-btn" data-act="bk-edit" id="bkBtn" aria-pressed="false">⇕ Schwarze Tasten</button>
+          <span class="bk-extra" hidden><button class="icon-btn small" data-act="bk-up" aria-label="Schwarze Tasten kürzer">▲</button><button class="icon-btn small" data-act="bk-down" aria-label="Schwarze Tasten länger">▼</button></span>
+        </div>
         <div class="zoom" role="group" aria-label="Zoom">
           <button class="icon-btn small" data-act="zoom-out" aria-label="Verkleinern">−</button>
           <button class="btn ghost zoom-label" data-act="zoom-real" id="zoomLabel" aria-label="Echte Tastengröße"></button>
@@ -641,6 +654,7 @@ function viewPractice(id, q) {
 
   const kbWrap = $('#kbWrap');
   const kb = new Keyboard(kbWrap, { lo: 36, hi: 76, onKey: tapNote, keyName: (m) => noteLabel(m, notation, flats) });
+  kb.setBlackRatio(settings.blackRatio || 0.55);
 
   // Zoom: gespeichert als Anteil der echten Tastengröße, je Hand-Ansicht
   function applyZoom() {
@@ -670,7 +684,7 @@ function viewPractice(id, q) {
     getBeatsPerBar: () => bpb,
     onSchedule: (beat, bar, time) => {
       const level = beat === 0 ? 2 : (bpb === 6 && beat === 3 ? 1 : 0);
-      engine.click(time, level, settings.sound === 'off' ? 0.25 : 0.12);
+      if (settings.click !== false) engine.click(time, level, settings.sound === 'off' ? 0.25 : 0.12);
       if (beat === 0 && settings.sound !== 'off' && N()) {
         const s = P.steps[stepAt(bar)];
         const notes = withBass(s);
@@ -789,7 +803,11 @@ function viewPractice(id, q) {
     $$('[data-group=sound] button').forEach((b) => b.setAttribute('aria-pressed', String(settings.sound === b.dataset.sound)));
     // Klaviatur
     $$('[data-group=hand] button').forEach((b) => b.setAttribute('aria-pressed', String(settings.hand === b.dataset.hand)));
-    kb.update({ cur, next: N() > 1 ? next : null, glide: P.glide, dur: P.glideDur, aids, showRH, showLH,
+    const cb = $('#clickBtn');
+    cb.innerHTML = settings.click !== false ? `${icon.speaker} Klick` : `${icon.mute} Klick aus`;
+    cb.setAttribute('aria-pressed', String(settings.click !== false));
+    cb.classList.toggle('off', settings.click === false);
+    kb.update({ frame: P.frame, cur, next: N() > 1 ? next : null, glide: P.glide, dur: P.glideDur, aids, showRH, showLH,
       focus: settings.hand === 'rechts' ? 'rh' : settings.hand === 'links' ? 'lh' : 'both' });
   }
 
@@ -812,6 +830,16 @@ function viewPractice(id, q) {
       case 'prev': return jump(P.idx - 1);
       case 'slower': P.bpm = Math.max(30, P.bpm - 4); return update();
       case 'faster': P.bpm = Math.min(200, P.bpm + 4); return update();
+      case 'click': setSettings({ click: settings.click === false }); return update();
+      case 'bk-edit': {
+        const on = b.getAttribute('aria-pressed') !== 'true';
+        b.setAttribute('aria-pressed', String(on));
+        $('.bk-extra').hidden = !on;
+        kb.setBlackEdit(on, (r) => setSettings({ blackRatio: r }));
+        return;
+      }
+      case 'bk-up': kb.setBlackRatio(kb.blackRatio - 0.03); setSettings({ blackRatio: kb.blackRatio }); return;
+      case 'bk-down': kb.setBlackRatio(kb.blackRatio + 0.03); setSettings({ blackRatio: kb.blackRatio }); return;
       case 'zoom-in': return setZoomPx(kb.W * 1.15);
       case 'zoom-out': return setZoomPx(kb.W / 1.15);
       case 'zoom-real': return setZoomPx(realKeyPx());

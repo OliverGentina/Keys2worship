@@ -53,7 +53,7 @@ a { color: var(--accent); text-decoration: none; }
 .btn.wide { width: 100%; }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-size: 22px; font-weight: 600; flex: none; }
 .icon-btn.small { width: 40px; height: 40px; font-size: 20px; }
-.icon-btn.tall { height: 76px; width: 48px; }
+.icon-btn.tall { height: 60px; width: 48px; }
 .back { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-weight: 600; }
 .play { width: 60px; height: 60px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink); display: inline-flex; align-items: center; justify-content: center; flex: none; }
 
@@ -100,15 +100,15 @@ a { color: var(--accent); text-decoration: none; }
 code { background: var(--bg); padding: 1px 6px; border-radius: 6px; }
 
 /* Übungsansicht */
-.practice { height: 100dvh; display: flex; flex-direction: column; gap: 12px; padding: max(12px, env(safe-area-inset-top)) var(--pad) max(12px, env(safe-area-inset-bottom)); overflow: hidden; }
+.practice { height: 100dvh; display: flex; flex-direction: column; gap: 10px; padding: max(12px, env(safe-area-inset-top)) var(--pad) max(12px, env(safe-area-inset-bottom)); overflow: hidden; }
 .p-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .p-title { display: flex; flex-direction: column; }
 .p-title strong { font-size: 18px; }
 .strip { display: flex; gap: 10px; align-items: center; }
 .strip-scroll { flex: 1; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding: 2px; scrollbar-width: none; }
 .strip-scroll::-webkit-scrollbar { display: none; }
-.chord-card { flex: 0 0 auto; min-width: 150px; height: 76px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; text-align: left; scroll-snap-align: center; }
-.cc-name { font-size: 32px; }
+.chord-card { flex: 0 0 auto; min-width: 140px; height: 60px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; text-align: left; scroll-snap-align: center; }
+.cc-name { font-size: 28px; }
 .cc-meta { display: flex; flex-direction: column; align-items: flex-end; }
 .cc-tag { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 .cc-inv { font-size: 12px; color: var(--muted); }
@@ -118,11 +118,11 @@ code { background: var(--bg); padding: 1px 6px; border-radius: 6px; }
 .p-mid { display: grid; grid-template-columns: minmax(240px, 300px) 1fr minmax(290px, 330px); gap: 12px; }
 .now { display: flex; align-items: center; gap: 16px; }
 .now-col { display: flex; flex-direction: column; }
-.now-name { font-size: 64px; line-height: 1; }
-.next-name { font-size: 40px; line-height: 1; color: var(--text-2); }
+.now-name { font-size: 50px; line-height: 1; }
+.next-name { font-size: 32px; line-height: 1; color: var(--text-2); }
 .moves { display: flex; flex-direction: column; gap: 8px; }
 .moves-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.mv { display: flex; align-items: center; gap: 12px; }
+.mv { display: flex; align-items: center; gap: 12px; font-size: 14px; }
 .mv-t { font-weight: 600; min-width: 200px; }
 .dot { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: var(--bg); font-weight: 700; font-size: 14px; flex: none; }
 .dot.solid { width: 16px; height: 16px; background: var(--text); }
@@ -152,7 +152,7 @@ code { background: var(--bg); padding: 1px 6px; border-radius: 6px; }
 .kb { position: relative; display: flex; flex-direction: column; }
 .kb-viewport { position: relative; flex: 1; display: flex; overflow: hidden; touch-action: none; }
 .kb-track { position: relative; flex: none; display: flex; flex-direction: column; will-change: transform; }
-.kb-arrows { position: relative; height: 62px; flex: none; }
+.kb-arrows { position: relative; height: 48px; flex: none; }
 .kb-keys { position: relative; flex: 1; min-height: 120px; overflow: hidden; border-radius: 0 0 12px 12px; box-shadow: 0 -6px 0 #1E293B; background: var(--bg); touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 .key { position: absolute; top: 0; margin: 0; padding: 0; border: 0; touch-action: manipulation; }
 .key.white { background: #F8FAFC; border-radius: 0 0 8px 8px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px; font-size: 11px; font-weight: 600; color: #475569; z-index: 1; }
@@ -288,3 +288,25 @@ details summary { color: var(--muted); cursor: pointer; padding: 6px 0; }
 #unlockVersion { position: absolute !important; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 14px); font-size: 12px; letter-spacing: .02em; color: rgba(255,255,255,.55); }
 @media (prefers-reduced-motion: reduce) { #unlock .hello .g { fill-opacity: 1; stroke-opacity: 0; } #charaLogo { animation: none; } }
 .app-footer { text-align: center; font-size: 12px; color: var(--muted); padding-top: 8px; }
+
+/* Kompaktere Info-Karten über der Klaviatur */
+.p-mid .card { padding: 12px 16px; }
+.moves { gap: 5px; }
+.metro { gap: 8px; }
+.play { width: 54px; height: 54px; }
+.legend { font-size: 12px; }
+
+/* Klick an/aus */
+.click-btn { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--text-2); font-size: 12px; font-weight: 600; margin-left: auto; margin-right: 8px; }
+.click-btn.off { color: #FCA5A5; border-color: #7F1D1D; }
+
+/* Schwarze Tasten anpassen */
+.small-btn { min-height: 40px; padding: 0 12px; font-size: 14px; }
+.bk-tools .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.bk-extra { display: inline-flex; gap: 6px; }
+.bk-extra[hidden] { display: none; }
+.bk-handle { position: absolute; left: 0; height: 44px; z-index: 6; cursor: ns-resize; touch-action: none; display: flex; align-items: center; }
+.bk-handle::before { content: ""; position: absolute; left: 0; right: 0; top: 21px; height: 3px; background: var(--accent); box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 0 12px rgba(245,184,61,.7); }
+.bk-grip { position: relative; width: 80px; height: 26px; border-radius: 13px; background: var(--accent); box-shadow: 0 4px 12px rgba(0,0,0,.4); z-index: 1; }
+.bk-grip::after { content: "⇕"; display: flex; align-items: center; justify-content: center; height: 100%; color: var(--accent-ink); font-weight: 800; }
+.kb.bk-edit .key { pointer-events: none; }

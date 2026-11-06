@@ -30,7 +30,8 @@ export class Keyboard {
   constructor(root, opts = {}) {
     this.root = root;
     this.opts = Object.assign({ lo: 36, hi: 76, arrows: true, labels: true, onKey: null, keyName: (m) => String(m) }, opts);
-    this.view = { cur: null, next: null, glide: false, dur: 0, aids: true, showLH: true, showRH: true, focus: 'rh' };
+    this.view = { cur: null, next: null, glide: false, dur: 0, aids: true, showLH: true, showRH: true, focus: 'rh', frame: null };
+    this.offset = null;
     this.keyWidth = 0;      // gewünschte Tastenbreite in px (0 = ganze Klaviatur einpassen)
     this.offset = 0;
     this.build();
@@ -95,7 +96,7 @@ export class Keyboard {
     const minKeys = this.view.focus === 'lh' ? 5 : 8;
     this.W = Math.max(fit, Math.min(this.keyWidth || 0, vw / minKeys));
     this.H = h;
-    this.HB = Math.round(h * 0.62);
+    this.HB = Math.round(h * (this.blackRatio || 0.55));
     this.BW = Math.round(this.W * 0.58);
     this.S = Math.round(Math.max(22, Math.min(40, this.W * 0.62, this.W - this.BW - 6, this.BW - 4)));
     this.trackWidth = this.W * this.whiteCount;
@@ -111,6 +112,7 @@ export class Keyboard {
       }
     }
     this.root.style.setProperty('--marker', this.S + 'px');
+    this.placeHandle();
     this.paint(true);
   }
 
@@ -148,33 +150,86 @@ export class Keyboard {
     if (focusChanged) this.layout(); else this.paint(false);
   }
 
-  /** Ausschnitt so verschieben, dass die gerade wichtigen Tasten mittig zu sehen sind. */
+  /**
+   * Ausschnitt festlegen – starr: einmal so, dass alle Akkorde des Lieds (frame) hineinpassen.
+   * Verschoben wird nur, wenn der aktuelle oder nächste Akkord sonst aus dem Bild fiele.
+   */
   pan(instant) {
     const vw = this.viewport.clientWidth;
-    const { cur, next, focus, showLH, showRH } = this.view;
+    const { cur, next, focus, showLH, showRH, frame } = this.view;
     let target = 0;
     if (this.trackWidth > vw + 1 && cur) {
-      const set = [];
-      const add = (c) => {
-        if (!c) return;
+      const pick = (c) => {
+        const set = [];
+        if (!c) return set;
         if (focus !== 'lh' && showRH) set.push(...c.notes);
         if (focus !== 'rh' && showLH) set.push(c.bass);
+        return set.length ? set : c.notes;
       };
-      add(cur); add(next);
-      if (!set.length) set.push(...cur.notes);
-      let lo = Math.min(...set), hi = Math.max(...set);
-      let x0 = this.center(lo) - this.W, x1 = this.center(hi) + this.W;
-      // Passen nicht beide Hände ins Bild, hat die rechte Hand Vorrang
-      if (x1 - x0 > vw && focus === 'both') {
-        const r = [...cur.notes, ...(next ? next.notes : [])];
-        x0 = this.center(Math.min(...r)) - this.W; x1 = this.center(Math.max(...r)) + this.W;
+      const span = (set) => [this.center(Math.min(...set)) - this.W * 0.8, this.center(Math.max(...set)) + this.W * 0.8];
+      // 1) Grundposition aus dem ganzen Lied
+      let fr = null;
+      if (frame) {
+        const set = [];
+        if (focus !== 'lh' && showRH && frame.rh) set.push(...frame.rh);
+        if (focus !== 'rh' && showLH && frame.lh) set.push(...frame.lh);
+        if (set.length) fr = span(set);
+        if (fr && fr[1] - fr[0] > vw && focus === 'both' && frame.rh) fr = span(frame.rh); // rechte Hand hat Vorrang
       }
-      target = (x0 + x1) / 2 - vw / 2;
+      const key = fr ? fr.join(':') + ':' + vw.toFixed(0) + ':' + this.W.toFixed(1) : '';
+      if (key !== this.frameKey || this.offset == null) {
+        this.frameKey = key;
+        const base = fr || span([...pick(cur), ...pick(next)]);
+        target = (base[0] + base[1]) / 2 - vw / 2;
+      } else target = this.offset;
+      // 2) Nur nachführen, wenn der aktuelle/nächste Akkord nicht ganz sichtbar ist
+      const need = span([...pick(cur), ...pick(next)]);
+      if (need[1] - need[0] <= vw) {
+        if (need[0] < target) target = need[0];
+        if (need[1] > target + vw) target = need[1] - vw;
+      }
       target = Math.max(0, Math.min(this.trackWidth - vw, target));
     }
+    if (target === this.offset && !instant) return;
     this.track.style.transition = instant ? 'none' : 'transform 650ms cubic-bezier(.45,.05,.35,1)';
     this.offset = target;
     this.track.style.transform = `translateX(${-target}px)`;
+    this.placeHandle();
+  }
+
+  /** Länge der schwarzen Tasten (Anteil der Tastenhöhe). */
+  setBlackRatio(r) { this.blackRatio = Math.max(0.3, Math.min(0.75, r)); this.layout(); }
+
+  /** Anpass-Modus: eine ziehbare Linie am Ende der schwarzen Tasten. onChange(ratio) speichert. */
+  setBlackEdit(on, onChange) {
+    if (this.bkHandle) { this.bkHandle.remove(); this.bkHandle = null; }
+    this.root.classList.toggle('bk-edit', !!on);
+    if (!on) return;
+    const h = el('div', 'bk-handle', this.keysEl);
+    h.setAttribute('role', 'slider');
+    h.setAttribute('aria-label', 'Ende der schwarzen Tasten');
+    h.innerHTML = '<span class="bk-grip"></span>';
+    this.bkHandle = h;
+    this.placeHandle();
+    let startY = 0, startHB = 0;
+    h.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      h.setPointerCapture(e.pointerId); startY = e.clientY; startHB = this.HB;
+    });
+    h.addEventListener('pointermove', (e) => {
+      if (!h.hasPointerCapture(e.pointerId)) return;
+      const r = (startHB + e.clientY - startY) / this.H;
+      this.setBlackRatio(r);
+      onChange && onChange(this.blackRatio);
+    });
+  }
+
+  placeHandle() {
+    if (!this.bkHandle) return;
+    this.bkHandle.style.top = (this.HB - 22) + 'px';
+    this.bkHandle.style.width = this.trackWidth + 'px';
+    const grip = this.bkHandle.querySelector('.bk-grip');
+    if (grip) grip.style.marginLeft = ((this.offset || 0) + this.viewport.clientWidth / 2 - 40) + 'px';
   }
 
   paint(instant) {

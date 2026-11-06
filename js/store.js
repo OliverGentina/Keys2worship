@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS = {
   hand: 'rechts',     // Übungsansicht: 'rechts' | 'links' | 'beide'
   zoom: { rechts: 1, links: 1, beide: 0 }, // Anteil der echten Tastengröße (1 = 100 %), 0 = ganze Klaviatur
   pxPerMm: null,      // eigene Kalibrierung (null = Schätzung nach Gerät)
+  click: true,        // Metronom-Klick hörbar
+  blackRatio: 0.55,   // Länge der schwarzen Tasten (Anteil der Tastenhöhe)
   glideBeats: 1,      // wie viele Schläge vor dem Wechsel die Finger losgleiten
   sound: 'piano',     // 'piano' | 'rhodes' | 'off'
   volume: 0.8,
