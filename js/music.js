@@ -82,13 +82,13 @@ export function parseChord(symbol, notation = 'de') {
 }
 
 /** Akkordsymbol transponieren, Zusätze (m, 7, sus4, /Bass) bleiben erhalten. */
-export function transposeSymbol(symbol, semis, notation = 'de', flats = false) {
-  const nm = names(notation, flats);
+export function transposeSymbol(symbol, semis, notation = 'de', flats = false, outNotation = notation) {
+  const nm = names(outNotation, flats);
   return String(symbol).split('/').map((part) => {
     const r = readRoot(part, notation);
     if (!r) return part;
     let name = nm[(r.pc + semis + 120) % 12];
-    if (r.lower && notation === 'de') name = name.toLowerCase();
+    if (r.lower && notation === 'de' && outNotation === 'de') name = name.toLowerCase();
     return name + part.slice(r.len);
   }).join('/');
 }
@@ -200,4 +200,9 @@ export function splitChords(text) {
 export function keyIsEasy(symbol, notation = 'de') {
   const ch = parseChord(symbol, notation);
   return ch ? [0, 2, 7, 9, 4].includes(ch.root) : false;
+}
+
+/** Akkordsymbol aus einer Schreibweise in die andere bringen (z. B. Planning Center „Bm“ → deutsch „Hm“). */
+export function convertSymbol(symbol, from, to, flats = false, semis = 0) {
+  return transposeSymbol(symbol, semis, from, flats, to);
 }

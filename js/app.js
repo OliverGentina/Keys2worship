@@ -5,6 +5,7 @@ import { Keyboard, FINGER, REAL_KEY_MM, estimatePxPerMm } from './keyboard.js';
 import * as store from './store.js';
 import { VERSION } from './version.js';
 import { initSplash } from './splash.js';
+import * as pco from './pco.js';
 
 const app = document.getElementById('app');
 const engine = new SoundEngine();
@@ -49,28 +50,63 @@ function route() {
   const q = Object.fromEntries(new URLSearchParams(query || ''));
   const parts = path.split('/').filter(Boolean);
   window.scrollTo(0, 0);
-  if (parts[0] === 'song' && parts[2] === 'practice') return viewPractice(parts[1], q);
-  if (parts[0] === 'song' && parts[2] === 'edit') return viewEditor(parts[1]);
+  if (parts[0] === 'song' && parts[2] === 'practice') return viewPractice(decodeURIComponent(parts[1]), q);
+  if (parts[0] === 'song' && parts[2] === 'edit') return viewEditor(decodeURIComponent(parts[1]));
   if (parts[0] === 'new') return viewEditor(null);
   if (parts[0] === 'library') return viewLibrary();
   return viewHome();
 }
 window.addEventListener('hashchange', route);
 
-// ---------- Einstellungen (Dialog) ----------
-function openSettings(onChange) {
+// ---------- Einstellungen (wie Ambientpad: Menü mit Unterseiten) ----------
+const SOUND_NAMES = { piano: 'Klavier', rhodes: 'Rhodes', off: 'Aus' };
+const HAND_NAMES = { rechts: 'Rechte Hand', links: 'Linke Hand', beide: 'Beide Hände' };
+
+function openSettings(onChange, startPage = 'main') {
   const d = document.getElementById('settings');
-  d.innerHTML = `
-    <form method="dialog" class="sheet">
-      <h2>Einstellungen</h2>
-      <label class="row"><span>Notenschrift</span>
-        <select name="notation">
-          <option value="de" ${settings.notation === 'de' ? 'selected' : ''}>Deutsch (H, Fis, B)</option>
-          <option value="en" ${settings.notation === 'en' ? 'selected' : ''}>Englisch (B, F#, Bb)</option>
-        </select></label>
-      <div class="calib">
-        <span>Echte Tastengröße kalibrieren</span>
-        <span class="muted small">Leg eine Bankkarte (8,56 cm breit) auf den Balken und stell ihn mit −/+ gleich lang ein.</span>
+  let page = startPage;
+  const changed = () => { onChange && onChange(); };
+  const pct = (z) => (z ? Math.round(z * 100) + ' %' : 'Alles');
+
+  const pages = {
+    main: { title: 'Einstellungen', html: () => `
+      <button class="mrow feature" data-go="pco"><span class="mi">🎵</span><span class="mt"><b>Planning Center</b>
+        <small>${pco.isConnected() ? `Verbunden${pco.userName() ? ' als ' + esc(pco.userName()) : ''} · Setlist & Lieder` : 'Setlist laden, Lieder holen'}</small></span><span class="mc">›</span></button>
+      <div class="menu">
+        <button class="mrow" data-go="keys"><span class="mi">🎹</span><span class="mt"><b>Klaviatur</b><small>${HAND_NAMES[settings.hand]} · ${pct(settings.zoom[settings.hand])}</small></span><span class="mc">›</span></button>
+        <button class="mrow" data-go="metro"><span class="mi">♩</span><span class="mt"><b>Metronom &amp; Gleiten</b><small>Finger gleiten ${settings.glideBeats} ${settings.glideBeats === 1 ? 'Schlag' : 'Schläge'} vor dem Wechsel</small></span><span class="mc">›</span></button>
+        <button class="mrow" data-go="sound"><span class="mi">🎚</span><span class="mt"><b>Klang</b><small>${SOUND_NAMES[settings.sound]} · ${Math.round(settings.volume * 100)} %</small></span><span class="mc">›</span></button>
+        <button class="mrow" data-go="notation"><span class="mi">Aa</span><span class="mt"><b>Notenschrift</b><small>${settings.notation === 'de' ? 'Deutsch (H, Fis, B)' : 'Englisch (B, F#, Bb)'}</small></span><span class="mc">›</span></button>
+        <a class="mrow" href="anleitung.html"><span class="mi">📖</span><span class="mt"><b>Anleitung</b><small>Schritt für Schritt mit Bildern</small></span><span class="mc">›</span></a>
+        <button class="mrow" data-go="app"><span class="mi">ⓘ</span><span class="mt"><b>App &amp; Speicher</b><small>Version ${VERSION}</small></span><span class="mc">›</span></button>
+      </div>` },
+
+    pco: { title: 'Planning Center', html: () => `
+      <p>${pco.isConnected() ? `Verbunden${pco.userName() ? ' als <b>' + esc(pco.userName()) + '</b>' : ''}.` : 'Noch nicht verbunden. Du meldest dich einmal mit deinem Planning-Center-Konto an – die App liest nur Lieder und Setlists, sie ändert nichts.'}</p>
+      <div class="group">
+        <button class="btn primary big" data-pco="next">⚡ Nächste Veranstaltung laden</button>
+        <button class="btn" data-pco="plans">Veranstaltung auswählen …</button>
+        <button class="btn" data-pco="search">Lied aus Planning Center holen …</button>
+      </div>
+      ${pco.isConnected() ? '<button class="btn ghost danger" data-pco="logout">Verbindung trennen</button>' : '<button class="btn" data-pco="login">Mit Planning Center verbinden</button>'}
+      <details><summary>Erweitert</summary>
+        <div class="group">
+          <label class="field"><span>Client-ID der Planning-Center-App (leer = wie Ambientpad)</span>
+            <input class="input" id="pcoClient" value="${esc(pco.customClientId())}" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+          <p class="small muted">Callback-URL, die bei der App in Planning Center eingetragen sein muss:<br><code>${esc(pco.redirectUri())}</code></p>
+        </div>
+      </details>` },
+
+    keys: { title: 'Klaviatur', html: () => `
+      <div class="group">
+        <span class="field-label">Ansicht beim Öffnen</span>
+        <div class="seg" role="group" aria-label="Hand">${Object.entries(HAND_NAMES).map(([k, v]) => `<button data-set-hand="${k}" aria-pressed="${settings.hand === k}">${v}</button>`).join('')}</div>
+        <p class="small muted">Gemerkter Zoom: Rechte Hand ${pct(settings.zoom.rechts)} · Linke Hand ${pct(settings.zoom.links)} · Beide ${pct(settings.zoom.beide)}. Ändern über − / + über der Klaviatur.</p>
+        <button class="btn" data-zoom-reset>Zoom zurücksetzen (100 % / Beide: alles)</button>
+      </div>
+      <div class="group calib">
+        <span class="field-label">Echte Tastengröße kalibrieren</span>
+        <span class="small muted">Leg eine Bankkarte (8,56 cm breit) auf den Balken und stell ihn mit −/+ gleich lang ein. Dann entspricht „100 %“ genau einer echten Klaviertaste.</span>
         <div class="calib-bar" id="calibBar"></div>
         <div class="row-gap">
           <button type="button" class="icon-btn small" data-cal="-1" aria-label="Kürzer">−</button>
@@ -78,39 +114,210 @@ function openSettings(onChange) {
           <button type="button" class="btn ghost" data-cal="0">Automatisch</button>
           <span class="muted small" id="calibInfo"></span>
         </div>
+      </div>` },
+
+    metro: { title: 'Metronom & Gleiten', html: () => `
+      <div class="group">
+        <span class="field-label">Finger gleiten los …</span>
+        <div class="seg" role="group" aria-label="Gleiten">${[1, 2, 3].map((n) => `<button data-glide="${n}" aria-pressed="${settings.glideBeats === n}">${n} ${n === 1 ? 'Schlag' : 'Schläge'} vorher</button>`).join('')}</div>
+        <p class="small muted">So lange vor dem Akkordwechsel wandern die Fingernummern zur nächsten Taste. Am Anfang lieber 2 oder 3 Schläge – dann hast du mehr Zeit.</p>
       </div>
-      <label class="row"><span>Finger gleiten los … Schläge vor dem Wechsel</span>
-        <select name="glideBeats">${[1, 2, 3].map((n) => `<option ${settings.glideBeats === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-      <label class="row"><span>Lautstärke</span><input type="range" name="volume" min="0" max="1" step="0.05" value="${settings.volume}"></label>
-      <p class="muted small">Keys2Worship · Version ${VERSION} · Ton: ${engine.running ? 'aktiv' : 'gesperrt – „Start“ bzw. ▶ antippen'}</p>
-      <div class="sheet-actions"><button class="btn primary" value="ok">Fertig</button></div>
-    </form>`;
-  const form = d.querySelector('form');
-  form.addEventListener('input', () => {
-    const f = new FormData(form);
-    setSettings({ notation: f.get('notation'), glideBeats: +f.get('glideBeats'), volume: +f.get('volume') });
-    onChange && onChange();
-  });
+      <p class="small muted">Tempo und Taktart stellst du pro Lied im Lied-Editor ein; Lieder aus Planning Center bringen sie mit.</p>` },
+
+    sound: { title: 'Klang', html: () => `
+      <div class="group">
+        <div class="seg" role="group" aria-label="Klang">${Object.entries(SOUND_NAMES).map(([k, v]) => `<button data-snd="${k}" aria-pressed="${settings.sound === k}">${v}</button>`).join('')}</div>
+        <label class="field"><span>Lautstärke · ${Math.round(settings.volume * 100)} %</span><input type="range" id="vol" min="0" max="1" step="0.05" value="${settings.volume}"></label>
+        <button class="btn" data-try>🔊 Probehören</button>
+      </div>
+      <p class="small muted">Klavier und Rhodes werden im Gerät erzeugt – es braucht kein Internet. Kein Ton? Lautstärke am iPad hochdrehen.</p>` },
+
+    notation: { title: 'Notenschrift', html: () => `
+      <div class="group">
+        <label class="trow"><input type="radio" name="nt" value="de" ${settings.notation === 'de' ? 'checked' : ''}><span><b>Deutsch</b><small>H, Hm, Fis, B (= englisch Bb)</small></span></label>
+        <label class="trow"><input type="radio" name="nt" value="en" ${settings.notation === 'en' ? 'checked' : ''}><span><b>Englisch</b><small>B, Bm, F#, Bb – wie in Planning Center</small></span></label>
+      </div>
+      <p class="small muted">Lieder aus Planning Center werden beim Holen in diese Schreibweise umgerechnet.</p>` },
+
+    app: { title: 'App & Speicher', html: () => `
+      <div class="group">
+        <p>Keys2Worship · Version <b>${VERSION}</b></p>
+        <p>Ton: <b>${engine.running ? 'aktiv' : 'gesperrt – „Start“ bzw. ▶ antippen'}</b></p>
+        <p>${store.loadSongs().length} Lieder in „Zu übende Lieder“${store.loadSetlist() ? ' · Setlist geladen' : ''}</p>
+        <button class="btn" data-update>Nach Update suchen</button>
+      </div>
+      <p class="small muted">Alle Lieder und Einstellungen liegen nur auf diesem Gerät. Die App funktioniert nach dem ersten Öffnen auch ohne Internet.</p>` },
+  };
+
+  const render = () => {
+    const pg = pages[page];
+    d.innerHTML = `
+      <div class="sheet">
+        <div class="sheet-head">
+          <button class="linkbtn" data-back ${page === 'main' ? 'style="visibility:hidden"' : ''}>‹ Zurück</button>
+          <h2>${esc(pg.title)}</h2>
+          <button class="linkbtn strong" data-close>Fertig</button>
+        </div>
+        <section class="spage">${pg.html()}</section>
+      </div>`;
+    if (page === 'keys') paintCalib();
+  };
   const paintCalib = () => {
-    d.querySelector('#calibBar').style.width = (85.6 * pxPerMm()) + 'px';
+    const bar = d.querySelector('#calibBar'); if (!bar) return;
+    bar.style.width = (85.6 * pxPerMm()) + 'px';
     d.querySelector('#calibInfo').textContent = settings.pxPerMm ? 'eigene Einstellung' : 'automatisch geschätzt';
   };
-  form.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-cal]'); if (!b) return;
-    const k = +b.dataset.cal;
-    setSettings({ pxPerMm: k === 0 ? null : pxPerMm() * (k > 0 ? 1.01 : 1 / 1.01) });
-    paintCalib(); onChange && onChange();
+
+  d.onclick = (e) => {
+    if (e.target === d) return d.close();
+    const b = e.target.closest('button, input[type=radio]');
+    if (!b) return;
+    if (b.dataset.close != null) return d.close();
+    if (b.dataset.back != null) { page = 'main'; return render(); }
+    if (b.dataset.go) { page = b.dataset.go; return render(); }
+    if (b.dataset.pco) {
+      const a = b.dataset.pco;
+      if (a === 'logout') { pco.disconnect(); render(); return changed(); }
+      if (a === 'login') return pco.login('settings');
+      d.close();
+      return a === 'next' ? loadNextPlan() : a === 'plans' ? openPlanPicker() : openSongSearch();
+    }
+    if (b.dataset.setHand) { setSettings({ hand: b.dataset.setHand }); render(); return changed(); }
+    if (b.dataset.zoomReset != null) { setSettings({ zoom: { rechts: 1, links: 1, beide: 0 } }); render(); return changed(); }
+    if (b.dataset.cal != null) {
+      const k = +b.dataset.cal;
+      setSettings({ pxPerMm: k === 0 ? null : pxPerMm() * (k > 0 ? 1.01 : 1 / 1.01) });
+      paintCalib(); return changed();
+    }
+    if (b.dataset.glide) { setSettings({ glideBeats: +b.dataset.glide }); render(); return changed(); }
+    if (b.dataset.snd) { setSettings({ sound: b.dataset.snd }); render(); changed(); if (b.dataset.snd !== 'off') engine.chord(voice(), [55, 59, 62, 67], null, 0.2, 1.4, 0.05); return; }
+    if (b.dataset.try != null) { engine.unlock(); return engine.chord(voice(), [43, 55, 59, 62, 67], null, 0.22, 1.8, 0.04); }
+    if (b.dataset.update != null) { b.textContent = 'Lade neu …'; return navigator.serviceWorker?.getRegistration().then((r) => r && r.update()).finally(() => location.reload()); }
+    if (b.name === 'nt') { setSettings({ notation: b.value }); render(); return changed(); }
+  };
+  d.oninput = (e) => {
+    if (e.target.id === 'vol') { setSettings({ volume: +e.target.value }); e.target.previousElementSibling.textContent = `Lautstärke · ${Math.round(settings.volume * 100)} %`; changed(); }
+    if (e.target.id === 'pcoClient') pco.setClientId(e.target.value);
+  };
+  render();
+  if (!d.open) d.showModal();
+}
+
+// ---------- Planning Center: Auswahl-Dialoge ----------
+function sheet(title, bodyHtml) {
+  const d = document.getElementById('sheet2');
+  d.innerHTML = `<div class="sheet"><div class="sheet-head"><span></span><h2>${esc(title)}</h2><button class="linkbtn strong" data-close>Fertig</button></div><section class="spage">${bodyHtml}</section></div>`;
+  d.onclick = (e) => { if (e.target === d || e.target.closest('[data-close]')) d.close(); };
+  if (!d.open) d.showModal();
+  return d;
+}
+function toast(text) {
+  let t = document.getElementById('toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+  t.textContent = text; t.classList.add('on');
+  clearTimeout(t.timer); t.timer = setTimeout(() => t.classList.remove('on'), 3200);
+}
+const needLogin = (afterwards) => { if (pco.isConnected()) return false; pco.login(afterwards); return true; };
+
+async function applyPlan(row) {
+  const sl = await pco.loadPlan(row, settings.notation);
+  store.saveSetlist(sl);
+  const n = sl.songs.length, nc = sl.songs.filter((s) => s.noChords).length;
+  toast(n ? `Setlist geladen: ${n} Lieder${nc ? ` · ${nc} ohne Akkorde` : ''}` : 'Diese Veranstaltung enthält keine Lieder.');
+  if (!location.hash || location.hash === '#/' || location.hash === '#') viewHome(); else location.hash = '#/';
+}
+
+async function loadNextPlan() {
+  if (needLogin('next')) return;
+  toast('Lade nächste Veranstaltung …');
+  try {
+    const rows = await pco.upcomingPlans(2);
+    if (!rows.length) return toast('Keine kommende Veranstaltung gefunden.');
+    await applyPlan(rows[0]);
+  } catch (e) { if (e.status === 401) return pco.login('next'); toast(pco.errorText(e)); }
+}
+
+async function openPlanPicker() {
+  if (needLogin('plans')) return;
+  const d = sheet('Veranstaltung auswählen', `
+    <div class="pick-list" id="planList"><p class="muted">Lade kommende Veranstaltungen …</p></div>
+    <div class="group">
+      <label class="field"><span>Oder Link zu einem Plan einfügen</span>
+        <div class="row-gap"><input class="input" id="planLink" placeholder="https://services.planningcenteronline.com/plans/…" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn primary" data-link>Laden</button></div></label>
+    </div>`);
+  const list = d.querySelector('#planList');
+  d.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-link]'); if (!b) return;
+    b.disabled = true; b.textContent = 'Lade …';
+    try { await applyPlan(await pco.planFromLink(d.querySelector('#planLink').value)); d.close(); }
+    catch (err) { toast(pco.errorText(err)); b.disabled = false; b.textContent = 'Laden'; }
   });
-  paintCalib();
-  d.showModal();
+  try {
+    const rows = await pco.upcomingPlans(6);
+    list.innerHTML = rows.length ? '' : '<p class="muted">Keine kommenden Veranstaltungen gefunden.</p>';
+    rows.slice(0, 20).forEach((r) => {
+      const a = r.plan.attributes || {};
+      const b = document.createElement('button');
+      b.className = 'pick';
+      b.innerHTML = `<span><b>${esc(a.dates || 'ohne Datum')}</b><small>${esc([r.stName, a.title || a.series_title].filter(Boolean).join(' · '))}${a.items_count ? ` · ${a.items_count} Punkte` : ''}</small></span><span class="mc">›</span>`;
+      b.onclick = async () => { b.disabled = true; try { await applyPlan(r); d.close(); } catch (err) { toast(pco.errorText(err)); b.disabled = false; } };
+      list.appendChild(b);
+    });
+  } catch (e) { if (e.status === 401) return pco.login('plans'); list.innerHTML = `<p class="muted">${esc(pco.errorText(e))}</p>`; }
+}
+
+async function openSongSearch() {
+  if (needLogin('search')) return;
+  const d = sheet('Lied aus Planning Center', `
+    <div class="row-gap"><input class="input" id="songQ" placeholder="Titel oder Autor" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search"><button class="btn primary" data-search>Suchen</button></div>
+    <div class="pick-list" id="songList"><p class="muted">Zuletzt eingeplante Lieder werden geladen …</p></div>`);
+  const list = d.querySelector('#songList');
+  const showSongs = async (q) => {
+    list.innerHTML = '<p class="muted">Suche …</p>';
+    try {
+      const songs = await pco.searchSongs(q);
+      list.innerHTML = songs.length ? '' : '<p class="muted">Nichts gefunden.</p>';
+      songs.forEach((s) => {
+        const b = document.createElement('button');
+        b.className = 'pick';
+        b.innerHTML = `<span><b>${esc(s.title)}</b><small>${esc([s.author, s.last && 'zuletzt ' + s.last].filter(Boolean).join(' · '))}</small></span><span class="mc">›</span>`;
+        b.onclick = () => showArrangements(s);
+        list.appendChild(b);
+      });
+    } catch (e) { if (e.status === 401) return pco.login('search'); list.innerHTML = `<p class="muted">${esc(pco.errorText(e))}</p>`; }
+  };
+  const showArrangements = async (s) => {
+    list.innerHTML = `<p class="muted">Lade Arrangements von „${esc(s.title)}“ …</p>`;
+    try {
+      const arrs = await pco.songArrangements(s.id);
+      list.innerHTML = `<button class="pick back" data-back-search>‹ Zurück zur Liste</button>`;
+      list.querySelector('[data-back-search]').onclick = () => showSongs(d.querySelector('#songQ').value);
+      arrs.forEach((a) => {
+        const song = pco.songFromArrangement(s, a, settings.notation);
+        const saved = store.isSaved(song.id);
+        const row = document.createElement('div');
+        row.className = 'pick static';
+        row.innerHTML = `<span><b>${esc(a.name)}</b><small>Tonart ${esc(song.key)} · ${song.bpm} BPM · ${esc(song.meter)}${song.noChords ? ' · <em>keine Akkorde hinterlegt</em>' : ' · ' + song.sections.map((x) => esc(x.name)).join(', ')}</small></span>
+          <span class="row-gap"><button class="btn ${saved ? 'ghost' : 'primary'}" data-add>${saved ? '✓ Gemerkt' : '+ Merken'}</button><button class="btn ghost" data-go>Üben</button></span>`;
+        row.querySelector('[data-add]').onclick = (ev) => { store.upsertSong(song); ev.target.textContent = '✓ Gemerkt'; ev.target.className = 'btn ghost'; toast(`„${song.title}“ steht jetzt in „Zu übende Lieder“`); if (location.hash === '#/' || !location.hash) viewHome(); };
+        row.querySelector('[data-go]').onclick = () => { store.upsertSong(song); d.close(); location.hash = song.noChords ? `#/song/${song.id}/edit` : `#/song/${song.id}/practice`; };
+        list.appendChild(row);
+      });
+      if (!arrs.length) list.insertAdjacentHTML('beforeend', '<p class="muted">Dieses Lied hat noch kein Arrangement.</p>');
+    } catch (e) { if (e.status === 401) return pco.login('search'); list.innerHTML = `<p class="muted">${esc(pco.errorText(e))}</p>`; }
+  };
+  d.querySelector('[data-search]').onclick = () => showSongs(d.querySelector('#songQ').value);
+  d.querySelector('#songQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') showSongs(e.target.value); });
+  showSongs('');
 }
 
 // ---------- Startseite ----------
 function viewHome() {
   document.title = 'Keys2Worship';
   const songs = store.loadSongs();
+  const sl = store.loadSetlist();
   const lastId = store.getLast();
-  const last = songs.find((s) => s.id === lastId) || songs[0];
+  const last = store.getSong(lastId) || songs[0];
   let pairs = [];
   if (last) {
     const flats = prefersFlats(last.key, settings.notation);
@@ -126,6 +333,8 @@ function viewHome() {
     }
     pairs = pairs.slice(0, 4);
   }
+  const songMeta = (s) => `${esc(s.key)} · ${s.bpm} BPM · ${s.noChords && !store.isSaved(s.id) ? '<span class="warn-text">keine Akkorde</span>' : `${s.sections.length} ${s.sections.length === 1 ? 'Teil' : 'Teile'}`}`;
+
   app.innerHTML = `
   <div class="page">
     <header class="topbar">
@@ -142,29 +351,70 @@ function viewHome() {
         <h2 class="hero-title">${esc(last.title || 'Ohne Titel')}</h2>
         <p class="hero-sub">${esc(last.sections.map((s) => s.name).join(' · '))} — ${last.bpm} BPM · ${esc(last.meter)} · Tonart ${esc(last.key)}</p>
       </div>
-      <a class="btn dark big" href="#/song/${last.id}/practice">${icon.play} Üben</a>
+      <a class="btn dark big" href="#/song/${encodeURIComponent(last.id)}/practice${sl && sl.songs.some((x) => x.id === last.id) ? '?sl=1' : ''}">${icon.play} Üben</a>
     </section>` : ''}
+
+    <div class="h2-row"><h2 class="h2">Setlist aus Planning Center ${sl ? `<span class="muted small">${esc(sl.title)}${sl.date ? ' · ' + esc(sl.date) : ''}</span>` : ''}</h2>
+      ${sl ? '<div class="row-gap"><button class="btn ghost" data-act="pco-reload">Aktualisieren</button><button class="btn ghost" data-act="pco-plans">Andere wählen</button></div>' : ''}</div>
+    ${sl ? `
+    <ol class="list setlist">
+      ${sl.songs.map((s, i) => `<li class="list-item">
+        <div><span class="li-title"><span class="num">${i + 1}</span>${esc(s.title)}</span><span class="muted small">${songMeta(s)}</span></div>
+        <div class="row-gap">
+          ${store.isSaved(s.id) ? '<span class="small ok">✓ gemerkt</span>' : `<button class="btn ghost" data-save="${esc(s.id)}">+ Merken</button>`}
+          <a class="btn primary" href="#/song/${encodeURIComponent(s.id)}/${s.noChords && !store.isSaved(s.id) ? 'edit' : 'practice?sl=1'}">${s.noChords && !store.isSaved(s.id) ? 'Akkorde eintragen' : 'Üben'}</a>
+        </div></li>`).join('') || '<li class="muted">Diese Veranstaltung enthält keine Lieder.</li>'}
+    </ol>` : `
+    <section class="card dashed pco-card">
+      <p class="muted">Hol dir die Lieder des nächsten Gottesdienstes – mit Tonart, Tempo und (falls in Planning Center gepflegt) den Akkorden.</p>
+      <div class="row-gap wrap">
+        <button class="btn primary" data-act="pco-next">⚡ Nächste Veranstaltung laden</button>
+        <button class="btn ghost" data-act="pco-plans">Veranstaltung auswählen …</button>
+      </div>
+    </section>`}
+
     ${pairs.length ? `
     <h2 class="h2">Akkordwechsel trainieren <span class="muted small">aus „${esc(last.title)}“</span></h2>
     <section class="tiles">
-      ${pairs.map((p) => `<a class="tile" href="#/song/${last.id}/practice?sec=0&mode=wechsel&at=${p.i}">
+      ${pairs.map((p) => `<a class="tile" href="#/song/${encodeURIComponent(last.id)}/practice?sec=0&mode=wechsel&at=${p.i}">
         <span class="tile-title chord-font">${esc(p.label)}</span><span class="muted small">${p.note}</span></a>`).join('')}
     </section>` : ''}
-    <div class="h2-row"><h2 class="h2">Meine Lieder</h2><a class="btn ghost" href="#/new">+ Lied anlegen</a></div>
+
+    <div class="h2-row"><h2 class="h2">Zu übende Lieder</h2>
+      <div class="row-gap"><button class="btn ghost" data-act="pco-search">+ Aus Planning Center</button><a class="btn ghost" href="#/new">+ Lied anlegen</a></div></div>
     <ul class="list">
       ${songs.map((s) => `<li class="list-item">
-        <div><span class="li-title">${esc(s.title || 'Ohne Titel')}</span>
-        <span class="muted small">${esc(s.key)} · ${s.bpm} BPM · ${s.sections.length} ${s.sections.length === 1 ? 'Teil' : 'Teile'}</span></div>
-        <div class="row-gap"><a class="btn ghost" href="#/song/${s.id}/edit">Bearbeiten</a><a class="btn primary" href="#/song/${s.id}/practice">Üben</a></div>
-      </li>`).join('')}
+        <div><span class="li-title">${esc(s.title || 'Ohne Titel')}${s.source === 'pco' ? ' <span class="tag">PCO</span>' : ''}</span>
+        <span class="muted small">${songMeta(s)}</span></div>
+        <div class="row-gap"><a class="btn ghost" href="#/song/${encodeURIComponent(s.id)}/edit">Bearbeiten</a><a class="btn primary" href="#/song/${encodeURIComponent(s.id)}/practice">Üben</a></div>
+      </li>`).join('') || '<li class="muted">Noch keine Lieder – leg eins an oder hol es aus Planning Center.</li>'}
     </ul>
-    <section class="card dashed">
-      <span class="eyebrow">Bald</span>
-      <p class="muted">Lieder und Tonarten direkt aus <strong>Planning Center</strong> und <strong>Chara Technics</strong> übernehmen.</p>
-    </section>
-    <p class="app-footer">Keys2Worship · Version ${VERSION}</p>
+    <p class="app-footer">Keys2Worship · Version ${VERSION} · <a href="anleitung.html">Anleitung</a></p>
   </div>`;
-  $('[data-act=settings]').onclick = () => openSettings(() => viewHome());
+  app.onclick = (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.save) {
+      const s = (store.loadSetlist()?.songs || []).find((x) => x.id === b.dataset.save);
+      if (s) { store.upsertSong(structuredClone(s)); toast(`„${s.title}“ steht jetzt in „Zu übende Lieder“`); viewHome(); }
+      return;
+    }
+    switch (b.dataset.act) {
+      case 'settings': return openSettings(() => viewHome());
+      case 'pco-next': return loadNextPlan();
+      case 'pco-plans': return openPlanPicker();
+      case 'pco-search': return openSongSearch();
+      case 'pco-reload': return reloadSetlist();
+    }
+  };
+  cleanup = () => { app.onclick = null; };
+}
+
+async function reloadSetlist() {
+  const sl = store.loadSetlist(); if (!sl) return;
+  if (needLogin('reload')) return;
+  toast('Aktualisiere Setlist …');
+  try { await applyPlan(await pco.planFromLink(String(sl.planId))); }
+  catch (e) { if (e.status === 401) return pco.login('reload'); toast(pco.errorText(e)); }
 }
 
 // ---------- Lied-Editor ----------
@@ -280,6 +530,16 @@ function viewPractice(id, q) {
   const notation = settings.notation;
   const flats = prefersFlats(song.key, notation);
 
+  // Aus der Setlist geöffnet? Dann Vor/Zurück zum nächsten Lied anbieten
+  const sl = q.sl ? store.loadSetlist() : null;
+  const slPos = sl ? sl.songs.findIndex((x) => x.id === id) : -1;
+  const slLink = (i) => { const t = sl.songs[i]; const own = store.getSong(t.id); return `#/song/${encodeURIComponent(t.id)}/${own && !own.noChords ? 'practice?sl=1' : (t.noChords ? 'edit' : 'practice?sl=1')}`; };
+  const slNav = slPos >= 0 ? `<div class="sl-nav" aria-label="Setlist">
+      ${slPos > 0 ? `<a class="icon-btn small" href="${slLink(slPos - 1)}" aria-label="Vorheriges Lied">${icon.prev}</a>` : ''}
+      <span class="small muted">Lied ${slPos + 1}/${sl.songs.length}</span>
+      ${slPos < sl.songs.length - 1 ? `<a class="icon-btn small" href="${slLink(slPos + 1)}" aria-label="Nächstes Lied">${icon.next}</a>` : ''}
+    </div>` : '';
+
   const P = {
     sec: q.sec != null ? (q.sec === 'all' ? 'all' : Math.min(+q.sec, song.sections.length - 1)) : 0,
     mode: q.mode === 'wechsel' ? 'wechsel' : 'lied',
@@ -309,6 +569,7 @@ function viewPractice(id, q) {
       <div class="row-gap">
         <a class="back" href="#/">${icon.back} <span class="hide-narrow">Übersicht</span></a>
         <div class="p-title"><strong>${esc(song.title)}</strong><span class="muted small">Tonart ${esc(song.key)} · ${esc(song.meter)} · 1 Takt pro Akkord</span></div>
+        ${slNav}
       </div>
       <div class="row-gap wrap">
         <div class="seg" role="group" aria-label="Liedteil" data-group="sec">
@@ -474,7 +735,7 @@ function viewPractice(id, q) {
 
   function renderStrip() {
     $('#strip').innerHTML = P.steps.map((s, i) => `<button class="chord-card" data-i="${i}"><span class="chord-font cc-name">${esc(s.symbol)}</span><span class="cc-meta"><span class="cc-tag"></span><span class="cc-inv">${s.inversionName}</span></span></button>`).join('')
-      || '<p class="muted">Dieser Teil hat noch keine Akkorde. Tippe oben auf „Übersicht“ und bearbeite das Lied.</p>';
+      || `<p class="muted">${song.noChords ? 'Für dieses Lied sind in Planning Center keine Akkorde hinterlegt.' : 'Dieser Teil hat noch keine Akkorde.'} <a href="#/song/${encodeURIComponent(song.id)}/edit">Akkorde eintragen ›</a></p>`;
   }
 
   function update() {
@@ -646,7 +907,19 @@ function viewLibrary() {
 }
 
 // ---------- Start ----------
-route();
+(async () => {
+  const r = await pco.handleRedirect();
+  route();
+  if (!r) return;
+  if (!r.ok) { toast(r.error); return openSettings(null, 'pco'); }
+  toast('Mit Planning Center verbunden');
+  if (r.back && r.back !== location.hash) location.hash = r.back;
+  if (r.afterwards === 'next') loadNextPlan();
+  else if (r.afterwards === 'plans') openPlanPicker();
+  else if (r.afterwards === 'search') openSongSearch();
+  else if (r.afterwards === 'reload') reloadSetlist();
+  else openSettings(null, 'pco');
+})();
 initSplash({
   engine,
   version: VERSION,

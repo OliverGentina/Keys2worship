@@ -4,6 +4,7 @@
 const SONGS_KEY = 'keys2worship:songs';
 const SETTINGS_KEY = 'keys2worship:settings';
 const LAST_KEY = 'keys2worship:last';
+const SETLIST_KEY = 'keys2worship:setlist';
 
 export const DEFAULT_SETTINGS = {
   notation: 'de',     // 'de' (H, Fis …) oder 'en' (B, F# …)
@@ -47,7 +48,16 @@ export function loadSongs() {
   return s;
 }
 export function saveSongs(songs) { write(SONGS_KEY, songs); }
-export function getSong(id) { return loadSongs().find((s) => s.id === id) || null; }
+/** Eigene Version (Zu übende Lieder) hat Vorrang vor der Setlist-Version aus Planning Center. */
+export function getSong(id) {
+  return loadSongs().find((s) => s.id === id) || (loadSetlist()?.songs || []).find((s) => s.id === id) || null;
+}
+export const isSaved = (id) => loadSongs().some((s) => s.id === id);
+
+// Setlist aus Planning Center: { planId, stId, title, date, loaded, songs:[…] }
+export function loadSetlist() { return read(SETLIST_KEY, null); }
+export function saveSetlist(sl) { write(SETLIST_KEY, sl); }
+export function clearSetlist() { try { localStorage.removeItem(SETLIST_KEY); } catch { /* egal */ } }
 export function upsertSong(song) {
   const songs = loadSongs();
   const i = songs.findIndex((s) => s.id === song.id);
