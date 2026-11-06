@@ -97,7 +97,7 @@ export class Keyboard {
     this.H = h;
     this.HB = Math.round(h * 0.62);
     this.BW = Math.round(this.W * 0.58);
-    this.S = Math.round(Math.max(20, Math.min(40, this.W * 0.62)));
+    this.S = Math.round(Math.max(22, Math.min(40, this.W * 0.62, this.W - this.BW - 6, this.BW - 4)));
     this.trackWidth = this.W * this.whiteCount;
     this.track.style.width = this.trackWidth + 'px';
     const base = whiteAbs(this.opts.lo);
@@ -120,9 +120,23 @@ export class Keyboard {
     return (whiteAbs(m) - base) * this.W + this.W / 2;
   }
 
+  /**
+   * Mitte des sichtbaren oberen Tastenbereichs: Bei weißen Tasten liegt die Zahl in der Lücke
+   * zwischen den schwarzen Tasten (z. B. bei C etwas links, bei E etwas rechts).
+   */
+  topCenter(m) {
+    if (isBlack(m)) return this.center(m);
+    const pc = ((m % 12) + 12) % 12;
+    const left = (whiteAbs(m) - whiteAbs(this.opts.lo)) * this.W;
+    const l = [2, 4, 7, 9, 11].includes(pc) && m > this.opts.lo ? this.BW / 2 : 0;
+    const r = [0, 2, 5, 7, 9].includes(pc) && m < this.opts.hi ? this.W - this.BW / 2 : this.W;
+    return left + (l + r) / 2;
+  }
+
+  // Zahlen oben auf den Tasten – dort verdecken die aufgelegten Finger sie nicht
   markerPos(m) {
     const S = this.S;
-    return { x: this.center(m) - S / 2, y: isBlack(m) ? this.HB - S - 10 : this.H - S - 14 };
+    return { x: this.topCenter(m) - S / 2, y: isBlack(m) ? 8 : 10 };
   }
 
   inRange(m) { return m >= this.opts.lo && m <= this.opts.hi; }
@@ -232,7 +246,7 @@ export class Keyboard {
     const p = this.markerPos(m);
     const pill = el('div', 'kb-pill', this.pillLayer);
     pill.textContent = 'bleibt';
-    pill.style.transform = `translate(${this.center(m) - 24}px, ${p.y - 22}px)`;
+    pill.style.transform = `translate(${this.topCenter(m) - 24}px, ${p.y + this.S + 4}px)`;
   }
 
   ghost(m, text, color, faded) {
@@ -253,7 +267,7 @@ export class Keyboard {
     const step = Math.min(18, Math.max(10, (this.arrowLayer.clientHeight - 20) / 2));
     const arrow = (a, b, col, label, row) => {
       if (a === b) return;
-      const x1 = this.center(a), x2 = this.center(b), top = 10 + row * step;
+      const x1 = this.topCenter(a), x2 = this.topCenter(b), top = 10 + row * step;
       const line = el('div', 'kb-arrow', this.arrowLayer);
       Object.assign(line.style, { left: Math.min(x1, x2) + 'px', width: Math.abs(x2 - x1) + 'px', top: top + 'px', background: col });
       const head = el('div', 'kb-arrowhead ' + (x2 > x1 ? 'right' : 'left'), this.arrowLayer);
