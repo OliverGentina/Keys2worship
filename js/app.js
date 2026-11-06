@@ -401,6 +401,7 @@ function viewPractice(id, q) {
   }
   const ro = new ResizeObserver(() => applyZoom());
   ro.observe(kbWrap);
+  applyZoom();
   requestAnimationFrame(applyZoom);
 
   const transport = new Transport(engine, {
