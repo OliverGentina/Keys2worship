@@ -13,6 +13,8 @@ export const DEFAULT_SETTINGS = {
   pxPerMm: null,      // eigene Kalibrierung (null = Schätzung nach Gerät)
   click: true,        // Metronom-Klick hörbar
   blackRatio: 0.55,   // Länge der schwarzen Tasten (Anteil der Tastenhöhe)
+  midi: true,         // MIDI-Keyboard verwenden (falls der Browser es kann)
+  midiEcho: false,    // am Keyboard gespielte Töne zusätzlich in der App erklingen lassen
   glideBeats: 1,      // wie viele Schläge vor dem Wechsel die Finger losgleiten
   sound: 'piano',     // 'piano' | 'rhodes' | 'off'
   volume: 0.8,

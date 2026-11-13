@@ -6,6 +6,7 @@ import * as store from './store.js';
 import { VERSION } from './version.js';
 import { initSplash } from './splash.js';
 import * as pco from './pco.js';
+import { MidiInput, checkChord } from './midi.js';
 
 const app = document.getElementById('app');
 const engine = new SoundEngine();
@@ -14,6 +15,10 @@ settings.zoom = Object.assign({ rechts: 1, links: 1, beide: 0 }, settings.zoom |
 const pxPerMm = () => settings.pxPerMm || estimatePxPerMm();
 const realKeyPx = () => pxPerMm() * REAL_KEY_MM;
 const withBass = (s) => [s.bass, ...s.notes];
+const midi = new MidiInput();
+if (settings.midi !== false) midi.start();
+// Am Keyboard gespielte Töne optional in der App mitspielen (für Keyboards ohne Lautsprecher)
+midi.on((ev) => { if (ev.type === 'on' && settings.midiEcho) engine.note(voice(), ev.note, null, Math.min(0.4, 0.1 + ev.vel / 300), 1.2); });
 engine.setVolume(settings.volume);
 let cleanup = null; // räumt die aktuelle Ansicht auf (Metronom stoppen usw.)
 
@@ -76,6 +81,7 @@ function openSettings(onChange, startPage = 'main') {
       <div class="menu">
         <button class="mrow" data-go="keys"><span class="mi">🎹</span><span class="mt"><b>Klaviatur</b><small>${HAND_NAMES[settings.hand]} · ${pct(settings.zoom[settings.hand])}</small></span><span class="mc">›</span></button>
         <button class="mrow" data-go="metro"><span class="mi">♩</span><span class="mt"><b>Metronom &amp; Gleiten</b><small>Klick ${settings.click !== false ? 'an' : 'aus'} · Finger gleiten ${settings.glideBeats} ${settings.glideBeats === 1 ? 'Schlag' : 'Schläge'} vorher</small></span><span class="mc">›</span></button>
+        <button class="mrow" data-go="midi"><span class="mi">🎹</span><span class="mt"><b>MIDI-Keyboard</b><small>${midiSummary()}</small></span><span class="mc">›</span></button>
         <button class="mrow" data-go="sound"><span class="mi">🎚</span><span class="mt"><b>Klang</b><small>${SOUND_NAMES[settings.sound]} · ${Math.round(settings.volume * 100)} %</small></span><span class="mc">›</span></button>
         <button class="mrow" data-go="notation"><span class="mi">Aa</span><span class="mt"><b>Notenschrift</b><small>${settings.notation === 'de' ? 'Deutsch (H, Fis, B)' : 'Englisch (B, F#, Bb)'}</small></span><span class="mc">›</span></button>
         <a class="mrow" href="anleitung.html"><span class="mi">📖</span><span class="mt"><b>Anleitung</b><small>Schritt für Schritt mit Bildern</small></span><span class="mc">›</span></a>
@@ -135,6 +141,18 @@ function openSettings(onChange, startPage = 'main') {
         <button class="btn" data-try>🔊 Probehören</button>
       </div>
       <p class="small muted">Klavier und Rhodes werden im Gerät erzeugt – es braucht kein Internet. Kein Ton? Lautstärke am iPad hochdrehen.</p>` },
+
+    midi: { title: 'MIDI-Keyboard', html: () => `
+      <div class="group">
+        <p><b>${midiSummary()}</b></p>
+        ${midi.connected ? `<p class="small muted">Gefunden: ${midi.devices.map(esc).join(', ')}</p>` : ''}
+        <label class="trow"><input type="checkbox" id="midiOn" ${settings.midi !== false ? 'checked' : ''}><span><b>MIDI-Keyboard verwenden</b><small>Gedrückte Tasten erscheinen grün (richtig) oder rot (falscher Ton).</small></span></label>
+        <label class="trow"><input type="checkbox" id="midiEcho" ${settings.midiEcho ? 'checked' : ''}><span><b>Töne in der App mitspielen</b><small>Nur nötig, wenn dein Keyboard keine eigenen Lautsprecher hat.</small></span></label>
+      </div>
+      ${midi.supported ? '' : `<div class="group"><p><b>So klappt es auf dem iPad:</b></p>
+        <p class="small">Safari kann kein MIDI. Installiere den kostenlosen <b>MIDIWeb Browser</b> aus dem App Store und öffne darin <code>olivergentina.github.io/Keys2worship</code>. Am Mac oder PC geht es direkt in Chrome.</p></div>`}
+      <div class="group"><p><b>Anschließen</b></p>
+        <p class="small">USB-Kabel von der eckigen USB-Buchse („Computer“/„USB to Host“) am Piano zum iPad – mit USB-C-Kabel bzw. Lightning-auf-USB-Kamera-Adapter. Piano einschalten, dann die App öffnen.</p></div>` },
 
     notation: { title: 'Notenschrift', html: () => `
       <div class="group">
@@ -203,9 +221,19 @@ function openSettings(onChange, startPage = 'main') {
     if (e.target.id === 'vol') { setSettings({ volume: +e.target.value }); e.target.previousElementSibling.textContent = `Lautstärke · ${Math.round(settings.volume * 100)} %`; changed(); }
     if (e.target.id === 'pcoClient') pco.setClientId(e.target.value);
     if (e.target.id === 'clickOn') { setSettings({ click: e.target.checked }); changed(); }
+    if (e.target.id === 'midiOn') { setSettings({ midi: e.target.checked }); if (e.target.checked) midi.start().then(render); changed(); }
+    if (e.target.id === 'midiEcho') { setSettings({ midiEcho: e.target.checked }); changed(); }
   };
   render();
   if (!d.open) d.showModal();
+}
+
+function midiSummary() {
+  if (settings.midi === false) return 'Aus';
+  if (!midi.supported) return 'Nicht in Safari – MIDIWeb Browser nutzen';
+  if (midi.state === 'denied') return 'Zugriff verweigert';
+  if (midi.connected) return 'Verbunden: ' + midi.devices[0] + (midi.devices.length > 1 ? ` (+${midi.devices.length - 1})` : '');
+  return 'Kein Keyboard gefunden';
 }
 
 // ---------- Planning Center: Auswahl-Dialoge ----------
@@ -548,7 +576,7 @@ function viewPractice(id, q) {
   const P = {
     sec: q.sec != null ? (q.sec === 'all' ? 'all' : Math.min(+q.sec, song.sections.length - 1)) : 0,
     mode: q.mode === 'wechsel' ? 'wechsel' : 'lied',
-    idx: 0, pair: 0, playing: false, beat: 0, glide: false, glideDur: 0,
+    idx: 0, pair: 0, playing: false, beat: 0, glide: false, glideDur: 0, wait: false, armed: true, fresh: false, okFlash: 0,
     bpm: song.bpm, anchorIdx: 0, steps: [], invalid: [],
   };
   const bpb = beatsPerBar(song.meter);
@@ -634,6 +662,10 @@ function viewPractice(id, q) {
         <div class="seg small" role="group" aria-label="Hand" data-group="hand">
           <button data-hand="rechts">Rechte Hand</button><button data-hand="links">Linke Hand</button><button data-hand="beide">Beide</button>
         </div>
+        <div class="row-gap midi-tools" id="midiTools" hidden>
+          <span class="midi-chip" id="midiChip"></span>
+          <button class="btn ghost small-btn" data-act="wait" id="waitBtn" aria-pressed="false">⏸ Warten bis richtig</button>
+        </div>
         <div class="row-gap bk-tools">
           <button class="btn ghost small-btn" data-act="bk-edit" id="bkBtn" aria-pressed="false">⇕ Schwarze Tasten</button>
           <span class="bk-extra" hidden><button class="icon-btn small" data-act="bk-up" aria-label="Schwarze Tasten kürzer">▲</button><button class="icon-btn small" data-act="bk-down" aria-label="Schwarze Tasten länger">▼</button></span>
@@ -710,7 +742,7 @@ function viewPractice(id, q) {
 
   function start() {
     if (!N()) return;
-    P.anchorIdx = P.idx; P.beat = 0; P.glide = false; P.playing = true;
+    P.anchorIdx = P.idx; P.beat = 0; P.glide = false; P.playing = true; P.wait = false;
     transport.start();
     keepAwake(true);
     update();
@@ -730,8 +762,8 @@ function viewPractice(id, q) {
     P.glide = true; P.glideDur = 60000 / P.bpm;
     update();
     glideTimer = setTimeout(() => {
-      P.idx = target; P.glide = false; update();
-      if (settings.sound !== 'off') {
+      P.idx = target; P.glide = false; P.armed = true; P.fresh = false; update();
+      if (settings.sound !== 'off' && !P.wait) {
         const s = P.steps[target];
         engine.chord(voice(), withBass(s), null, 0.24, 3 * 60 / P.bpm);
       }
@@ -809,6 +841,8 @@ function viewPractice(id, q) {
     cb.classList.toggle('off', settings.click === false);
     kb.update({ frame: P.frame, cur, next: N() > 1 ? next : null, glide: P.glide, dur: P.glideDur, aids, showRH, showLH,
       focus: settings.hand === 'rechts' ? 'rh' : settings.hand === 'links' ? 'lh' : 'both' });
+    $('#waitBtn')?.setAttribute('aria-pressed', String(P.wait));
+    paintMidi();
   }
 
   app.onclick = (e) => {
@@ -831,6 +865,10 @@ function viewPractice(id, q) {
       case 'slower': P.bpm = Math.max(30, P.bpm - 4); return update();
       case 'faster': P.bpm = Math.min(200, P.bpm + 4); return update();
       case 'click': setSettings({ click: settings.click === false }); return update();
+      case 'wait':
+        P.wait = !P.wait; P.armed = true; P.fresh = false;
+        if (P.wait && P.playing) stop();
+        return update();
       case 'bk-edit': {
         const on = b.getAttribute('aria-pressed') !== 'true';
         b.setAttribute('aria-pressed', String(on));
@@ -846,6 +884,36 @@ function viewPractice(id, q) {
       case 'settings': return openSettings(() => { applyZoom(); update(); });
     }
   };
+  // ---- MIDI: gedrückte Tasten zeigen, Akkord prüfen, Warte-Modus ----
+  const targetOf = (st) => {
+    const showLH = settings.hand !== 'rechts', showRH = settings.hand !== 'links';
+    return [...(showRH ? st.notes : []), ...(showLH ? [st.bass] : [])];
+  };
+  function paintMidi() {
+    const tools = $('#midiTools');
+    if (!tools) return;
+    const show = settings.midi !== false && midi.connected;
+    tools.hidden = !show;
+    if (!show || !N()) { kb.setHeld(new Set(), null); return; }
+    $('#midiChip').textContent = '🎹 ' + midi.devices[0];
+    const target = targetOf(P.steps[P.idx]);
+    kb.setHeld(midi.held, new Set(target.map((n) => n % 12)));
+    const r = checkChord(midi.held, target);
+    const c = $('#count');
+    if (r.ok) { c.textContent = '✓ Richtig!'; c.classList.add('ok-text'); }
+    else if (P.wait && !P.playing) { c.textContent = r.any ? (r.wrong.length ? 'Falscher Ton …' : 'Fast …') : `Greif ${P.steps[P.idx].symbol}`; c.classList.remove('ok-text'); }
+    else c.classList.remove('ok-text');
+    // Warte-Modus: richtiger Akkord → weiter zum nächsten (erst nach einem neuen Anschlag)
+    if (P.wait && !P.playing && !P.glide && r.ok && P.armed && P.fresh && N() > 1) {
+      P.armed = false;
+      setTimeout(() => stepManually(), 220);
+    }
+  }
+  const offMidi = midi.on((ev) => {
+    if (ev.type === 'on') P.fresh = true;
+    paintMidi();
+  });
+
   const onKey = (e) => {
     if (e.target.closest('input, select, textarea')) return;
     if (e.code === 'Space') { e.preventDefault(); engine.unlock(); P.playing ? stop() : start(); }
@@ -863,6 +931,7 @@ function viewPractice(id, q) {
     transport.stop(); clearTimeout(glideTimer); keepAwake(false);
     ro.disconnect(); kb.destroy();
     document.removeEventListener('keydown', onKey);
+    offMidi();
     document.removeEventListener('visibilitychange', onHide);
     app.onclick = null;
   };

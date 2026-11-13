@@ -197,6 +197,16 @@ export class Keyboard {
     this.placeHandle();
   }
 
+  /** Am MIDI-Keyboard gedrückte Tasten zeigen: grün = gehört zum Akkord, rot = falscher Ton. */
+  setHeld(held, targetPcs) {
+    for (const [m, b] of this.keys) {
+      const on = held.has(m);
+      b.classList.toggle('held', on);
+      b.classList.toggle('ok', on && !!targetPcs && targetPcs.has(m % 12));
+      b.classList.toggle('bad', on && !!targetPcs && !targetPcs.has(m % 12));
+    }
+  }
+
   /** Länge der schwarzen Tasten (Anteil der Tastenhöhe). */
   setBlackRatio(r) { this.blackRatio = Math.max(0.3, Math.min(0.75, r)); this.layout(); }
 

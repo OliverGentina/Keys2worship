@@ -310,3 +310,13 @@ details summary { color: var(--muted); cursor: pointer; padding: 6px 0; }
 .bk-grip { position: relative; width: 80px; height: 26px; border-radius: 13px; background: var(--accent); box-shadow: 0 4px 12px rgba(0,0,0,.4); z-index: 1; }
 .bk-grip::after { content: "⇕"; display: flex; align-items: center; justify-content: center; height: 100%; color: var(--accent-ink); font-weight: 800; }
 .kb.bk-edit .key { pointer-events: none; }
+
+/* MIDI-Keyboard */
+.midi-tools[hidden] { display: none; }
+.midi-chip { font-size: 13px; color: var(--ok); font-weight: 600; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#waitBtn[aria-pressed="true"] { background: var(--ok); color: #052e16; border-color: var(--ok); }
+.ok-text { color: var(--ok) !important; }
+.key.held::after { content: ""; position: absolute; left: 12%; right: 12%; bottom: 10px; height: 18%; max-height: 40px; border-radius: 8px; background: #94A3B8; opacity: .95; pointer-events: none; }
+.key.black.held::after { bottom: 8px; height: 22%; }
+.key.held.ok::after { background: #22C55E; box-shadow: 0 0 14px rgba(34,197,94,.7); }
+.key.held.bad::after { background: #EF4444; box-shadow: 0 0 14px rgba(239,68,68,.7); }

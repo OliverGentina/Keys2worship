@@ -2,7 +2,9 @@
 
 Eine Web-App fürs iPad (und iPhone), mit der man ohne Vorkenntnisse lernt, Lobpreislieder auf dem Klavier zu begleiten. Der Fokus liegt auf **fließenden Akkordwechseln mit möglichst wenig Handbewegung**.
 
-## Was die App kann (v0.4)
+## Was die App kann (v0.5)
+
+- **MIDI-Keyboard** (z. B. Roland-Digitalpiano per USB): gedrückte Tasten grün/rot, „✓ Richtig!“, Warte-Modus „Warten bis richtig“. Auf dem iPad im kostenlosen *MIDIWeb Browser* öffnen (Safari kann kein Web MIDI), am Rechner in Chrome.
 
 - **Planning Center**: Anmeldung (OAuth + PKCE, dieselbe registrierte App wie Ambientpad), nächste Veranstaltung oder beliebigen Plan als Setlist laden, Lieder aus der Datenbank suchen; Tonart, Tempo, Taktart und Akkorde aus „Lyrics & Chords“ (inkl. Transponieren und Umrechnung in deutsche Akkordnamen)
 - **Startseite** mit „Setlist aus Planning Center“ und „Zu übende Lieder“ (eigene Liste, „+ Merken“)
@@ -56,6 +58,7 @@ Auf dem iPad: Seite in Safari öffnen → Teilen → „Zum Home-Bildschirm“. 
 | `js/store.js` | Lieder, Setlist und Einstellungen im Browser speichern (localStorage) |
 | `js/pco.js` | Planning Center: Anmeldung, Setlists, Liedsuche, Akkord-Charts lesen |
 | `js/splash.js` | Startbildschirm, Ton freischalten |
+| `js/midi.js` | MIDI-Keyboard lesen, Akkord prüfen |
 | `anleitung.html` | Anleitung mit Bildschirmfotos (`anleitung/`) |
 | `sw.js`, `manifest.webmanifest` | Offline-Fähigkeit und App-Installation |
 
