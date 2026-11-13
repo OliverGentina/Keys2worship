@@ -19,7 +19,9 @@ const midi = new MidiInput();
 const MIDIWEB_STORE = 'https://apps.apple.com/app/midiweb-browser/id6757226617';
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 const appUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');
-if (settings.midi !== false) midi.start();
+// MIDI erst nach dem Tipp auf „Start“ anfragen (nicht beim Laden): Manche Browser – auch MIDI-Browser
+// auf dem iPad – blockieren sonst die Seite, solange die Anfrage offen ist.
+const startMidi = () => { if (settings.midi !== false && midi.supported && !midi.access) setTimeout(() => midi.start(), 300); };
 // Am Keyboard gespielte Töne optional in der App mitspielen (für Keyboards ohne Lautsprecher)
 midi.on((ev) => { if (ev.type === 'on' && settings.midiEcho) engine.note(voice(), ev.note, null, Math.min(0.4, 0.1 + ev.vel / 300), 1.2); });
 engine.setVolume(settings.volume);
@@ -351,6 +353,7 @@ async function openSongSearch() {
 
 // ---------- Startseite ----------
 function viewHome() {
+  if (cleanup) { cleanup(); cleanup = null; } // alte Zuhörer (z. B. MIDI) abmelden, bevor neu gezeichnet wird
   document.title = 'Keys2Worship';
   const songs = store.loadSongs();
   const sl = store.loadSetlist();
@@ -1040,6 +1043,7 @@ function viewLibrary() {
 }
 
 // ---------- Start ----------
+window.__k2wStarted = true;
 (async () => {
   const r = await pco.handleRedirect();
   route();
@@ -1057,7 +1061,10 @@ initSplash({
   engine,
   version: VERSION,
   // Kurzer, leiser Akkord als Bestätigung, dass der Ton jetzt funktioniert
-  onStart: () => { if (settings.sound !== 'off') engine.chord(voice(), [55, 59, 62, 67], null, 0.16, 1.6, 0.06); },
+  onStart: () => {
+    if (settings.sound !== 'off') engine.chord(voice(), [55, 59, 62, 67], null, 0.16, 1.6, 0.06);
+    startMidi();
+  },
 });
 
 // Updates: neue Version wird beim nächsten Öffnen automatisch geladen (nicht mitten im Üben)

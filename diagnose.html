@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keys2Worship – Diagnose</title>
+<style>
+  body { margin: 0; padding: 24px; font: 16px/1.5 -apple-system, system-ui, sans-serif; background: #fff; color: #111; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .muted { color: #555; }
+  ul { list-style: none; padding: 0; margin: 16px 0; }
+  li { padding: 8px 12px; border-radius: 10px; margin-bottom: 6px; background: #f3f4f6; }
+  li.ok { background: #dcfce7; } li.bad { background: #fee2e2; } li.info { background: #eef2ff; }
+  button, a.btn { font: inherit; font-weight: 600; padding: 12px 18px; border-radius: 12px; border: 0; background: #f5b83d; color: #1a1206; margin: 4px 8px 4px 0; text-decoration: none; display: inline-block; }
+  #notes { font-size: 28px; font-weight: 700; min-height: 40px; }
+  pre { white-space: pre-wrap; word-break: break-all; background: #f3f4f6; padding: 10px; border-radius: 10px; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>Keys2Worship – Diagnose</h1>
+<p class="muted">Diese Seite prüft, was der Browser kann. Bitte ein Bildschirmfoto davon schicken.</p>
+<ul id="list"><li class="bad">JavaScript läuft nicht.</li></ul>
+<p>
+  <button id="midiBtn" type="button">MIDI testen</button>
+  <a class="btn" href="./">Zur App</a>
+</p>
+<p class="muted">Nach „MIDI testen“: Tasten am Piano drücken – sie erscheinen hier:</p>
+<div id="notes">–</div>
+<pre id="raw"></pre>
+<script>
+  var list = document.getElementById('list');
+  list.innerHTML = '';
+  function add(cls, text) { var li = document.createElement('li'); li.className = cls; li.textContent = text; list.appendChild(li); }
+  function check(name, ok, extra) { add(ok ? 'ok' : 'bad', (ok ? '✓ ' : '✗ ') + name + (extra ? ' – ' + extra : '')); }
+  add('ok', '✓ JavaScript läuft');
+  add('info', 'Browser: ' + navigator.userAgent);
+  add('info', 'Bildschirm: ' + innerWidth + ' × ' + innerHeight + ' (Faktor ' + devicePixelRatio + ')');
+  check('Web MIDI (requestMIDIAccess)', !!navigator.requestMIDIAccess, navigator.requestMIDIAccess ? '' : 'fehlt – in Safari normal, in MIDIWeb sollte es da sein');
+  check('Audio (AudioContext)', !!(window.AudioContext || window.webkitAudioContext));
+  var lsOk = false; try { localStorage.setItem('k2w-test', '1'); lsOk = localStorage.getItem('k2w-test') === '1'; localStorage.removeItem('k2w-test'); } catch (e) {}
+  check('Speicher (localStorage)', lsOk);
+  check('Service Worker (offline)', 'serviceWorker' in navigator, 'serviceWorker' in navigator ? '' : 'fehlt – App läuft trotzdem, nur nicht offline');
+  check('structuredClone', typeof structuredClone === 'function');
+  check('ResizeObserver', typeof ResizeObserver === 'function');
+  check('Dialog-Fenster (<dialog>)', typeof HTMLDialogElement === 'function');
+  var s = document.createElement('script'); s.type = 'module';
+  window.__modOk = function () { check('JavaScript-Module (für die App nötig)', true); };
+  s.textContent = 'window.__modOk && window.__modOk();';
+  document.head.appendChild(s);
+  setTimeout(function () { if (!window.__modTested) { window.__modTested = true; } }, 10);
+  setTimeout(function () {
+    var has = [].some.call(list.children, function (li) { return li.textContent.indexOf('Module') >= 0; });
+    if (!has) check('JavaScript-Module (für die App nötig)', false, 'werden nicht ausgeführt');
+  }, 1500);
+  // App-Dateien erreichbar?
+  ['js/app.js', 'css/app.css'].forEach(function (f) {
+    fetch(f, { cache: 'no-store' }).then(function (r) { check('Datei ' + f, r.ok, 'HTTP ' + r.status); })
+      .catch(function (e) { check('Datei ' + f, false, String(e)); });
+  });
+
+  var NAMES = ['C', 'Cis', 'D', 'Dis', 'E', 'F', 'Fis', 'G', 'Gis', 'A', 'B', 'H'];
+  var held = {};
+  function show() {
+    var ns = Object.keys(held).map(Number).sort(function (a, b) { return a - b; });
+    document.getElementById('notes').textContent = ns.length ? ns.map(function (n) { return NAMES[n % 12] + (Math.floor(n / 12) - 1); }).join('  ') : '–';
+  }
+  document.getElementById('midiBtn').onclick = function () {
+    if (!navigator.requestMIDIAccess) { add('bad', '✗ Kein Web MIDI in diesem Browser.'); return; }
+    navigator.requestMIDIAccess({ sysex: false }).then(function (acc) {
+      var names = [];
+      var each = function (fn) { acc.inputs.forEach ? acc.inputs.forEach(fn) : Array.from(acc.inputs.values()).forEach(fn); };
+      each(function (inp) {
+        names.push(inp.name || 'MIDI-Gerät');
+        inp.onmidimessage = function (e) {
+          var d = e.data, cmd = d[0] & 0xf0;
+          document.getElementById('raw').textContent = Array.from(d).join(' ') + '\n' + document.getElementById('raw').textContent.slice(0, 400);
+          if (cmd === 0x90 && d[2] > 0) held[d[1]] = 1;
+          else if (cmd === 0x80 || cmd === 0x90) delete held[d[1]];
+          show();
+        };
+      });
+      check('MIDI-Geräte', names.length > 0, names.length ? names.join(', ') : 'keins gefunden – Kabel/Piano prüfen');
+    }, function (e) { check('MIDI-Zugriff', false, String(e && e.message || e)); });
+  };
+</script>
+</body>
+</html>

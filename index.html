@@ -16,6 +16,25 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+  <!-- Startet die App nicht (z. B. in einem anderen Browser), wird der Grund sichtbar statt eines schwarzen Bilds -->
+  <script>
+    (function () {
+      var errs = [];
+      function rec(m) { errs.push(String(m).slice(0, 300)); }
+      window.addEventListener('error', function (e) { rec((e.message || 'Fehler') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); });
+      window.addEventListener('unhandledrejection', function (e) { rec('Promise: ' + (e.reason && (e.reason.message || e.reason))); });
+      setTimeout(function () {
+        if (window.__k2wStarted) return;
+        var d = document.createElement('div');
+        d.id = 'bootError';
+        d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#fff;color:#111;padding:32px 24px;font:16px/1.5 -apple-system,system-ui,sans-serif;overflow:auto';
+        d.innerHTML = '<h2>Keys2Worship startet nicht</h2><p>Bitte ein Bildschirmfoto davon schicken.</p>' +
+          '<pre></pre><p><a href="diagnose.html">Diagnose öffnen</a> · <a href="./" onclick="location.reload();return false">Neu laden</a></p>';
+        d.querySelector('pre').textContent = (errs.length ? errs.join('\n') : 'Keine Fehlermeldung – vermutlich werden JavaScript-Module nicht ausgeführt.') + '\n\n' + navigator.userAgent;
+        document.body.appendChild(d);
+      }, 5000);
+    })();
+  </script>
   <main id="app" aria-live="off"></main>
 
   <!-- Start-Bildschirm: Ton freischalten (iPad/iPhone brauchen einen Tipp), Schriftzug, Version -->

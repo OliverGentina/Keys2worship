@@ -328,3 +328,7 @@ details summary { color: var(--muted); cursor: pointer; padding: 6px 0; }
 .midi-card > div p { margin: 0; }
 .midi-card.ok { border-color: rgba(74,222,128,.5); background: rgba(34,197,94,.08); }
 .midi-card.hint { border-color: rgba(245,184,61,.5); }
+
+#bootError { position: fixed; inset: 0; z-index: 9999; background: #fff; color: #111; padding: 32px 24px; font: 16px/1.5 -apple-system, system-ui, sans-serif; overflow: auto; }
+#bootError pre { white-space: pre-wrap; word-break: break-all; background: #f3f4f6; padding: 12px; border-radius: 10px; font-size: 12px; }
+#bootError a { color: #b45309; font-weight: 600; }

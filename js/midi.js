@@ -16,7 +16,8 @@ export class MidiInput {
   get connected() { return this.devices.length > 0; }
 
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
-  emit(ev) { for (const fn of this.listeners) { try { fn(ev, this); } catch (e) { console.error(e); } } }
+  // Kopie der Liste: Ein Zuhörer darf sich währenddessen ab- oder neu anmelden, ohne eine Endlosschleife
+  emit(ev) { for (const fn of [...this.listeners]) { try { fn(ev, this); } catch (e) { console.error(e); } } }
 
   async start() {
     if (!this.supported) { this.state = 'unsupported'; this.emit({ type: 'state' }); return false; }
