@@ -320,3 +320,11 @@ details summary { color: var(--muted); cursor: pointer; padding: 6px 0; }
 .key.black.held::after { bottom: 8px; height: 22%; }
 .key.held.ok::after { background: #22C55E; box-shadow: 0 0 14px rgba(34,197,94,.7); }
 .key.held.bad::after { background: #EF4444; box-shadow: 0 0 14px rgba(239,68,68,.7); }
+
+/* MIDI-Hinweis auf der Startseite */
+.midi-card { display: flex; gap: 14px; align-items: flex-start; padding: 14px 18px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
+.midi-card > span { font-size: 26px; line-height: 1.2; }
+.midi-card > p, .midi-card > div { flex: 1; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.midi-card > div p { margin: 0; }
+.midi-card.ok { border-color: rgba(74,222,128,.5); background: rgba(34,197,94,.08); }
+.midi-card.hint { border-color: rgba(245,184,61,.5); }

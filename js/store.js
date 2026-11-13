@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS = {
   blackRatio: 0.55,   // Länge der schwarzen Tasten (Anteil der Tastenhöhe)
   midi: true,         // MIDI-Keyboard verwenden (falls der Browser es kann)
   midiEcho: false,    // am Keyboard gespielte Töne zusätzlich in der App erklingen lassen
+  hideMidiHint: false, // Hinweis „MIDIWeb Browser“ auf der Startseite ausgeblendet
   glideBeats: 1,      // wie viele Schläge vor dem Wechsel die Finger losgleiten
   sound: 'piano',     // 'piano' | 'rhodes' | 'off'
   volume: 0.8,

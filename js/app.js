@@ -16,6 +16,9 @@ const pxPerMm = () => settings.pxPerMm || estimatePxPerMm();
 const realKeyPx = () => pxPerMm() * REAL_KEY_MM;
 const withBass = (s) => [s.bass, ...s.notes];
 const midi = new MidiInput();
+const MIDIWEB_STORE = 'https://apps.apple.com/app/midiweb-browser/id6757226617';
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+const appUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');
 if (settings.midi !== false) midi.start();
 // Am Keyboard gespielte Töne optional in der App mitspielen (für Keyboards ohne Lautsprecher)
 midi.on((ev) => { if (ev.type === 'on' && settings.midiEcho) engine.note(voice(), ev.note, null, Math.min(0.4, 0.1 + ev.vel / 300), 1.2); });
@@ -150,7 +153,8 @@ function openSettings(onChange, startPage = 'main') {
         <label class="trow"><input type="checkbox" id="midiEcho" ${settings.midiEcho ? 'checked' : ''}><span><b>Töne in der App mitspielen</b><small>Nur nötig, wenn dein Keyboard keine eigenen Lautsprecher hat.</small></span></label>
       </div>
       ${midi.supported ? '' : `<div class="group"><p><b>So klappt es auf dem iPad:</b></p>
-        <p class="small">Safari kann kein MIDI. Installiere den kostenlosen <b>MIDIWeb Browser</b> aus dem App Store und öffne darin <code>olivergentina.github.io/Keys2worship</code>. Am Mac oder PC geht es direkt in Chrome.</p></div>`}
+        <p class="small">Safari kann kein MIDI. Installiere den kostenlosen <b>MIDIWeb Browser</b> und öffne darin <code>${esc(appUrl())}</code>. Am Mac oder PC geht es direkt in Chrome.</p>
+        <div class="row-gap wrap"><a class="btn primary" href="${MIDIWEB_STORE}" target="_blank" rel="noopener">MIDIWeb im App Store</a><button class="btn" data-midi-copy>Link kopieren</button></div></div>`}
       <div class="group"><p><b>Anschließen</b></p>
         <p class="small">USB-Kabel von der eckigen USB-Buchse („Computer“/„USB to Host“) am Piano zum iPad – mit USB-C-Kabel bzw. Lightning-auf-USB-Kamera-Adapter. Piano einschalten, dann die App öffnen.</p></div>` },
 
@@ -204,6 +208,7 @@ function openSettings(onChange, startPage = 'main') {
       d.close();
       return a === 'next' ? loadNextPlan() : a === 'plans' ? openPlanPicker() : openSongSearch();
     }
+    if (b.dataset.midiCopy != null) { navigator.clipboard?.writeText(appUrl()).then(() => toast('Link kopiert – in MIDIWeb einfügen')); setSettings({ hideMidiHint: false }); return; }
     if (b.dataset.setHand) { setSettings({ hand: b.dataset.setHand }); render(); return changed(); }
     if (b.dataset.zoomReset != null) { setSettings({ zoom: { rechts: 1, links: 1, beide: 0 } }); render(); return changed(); }
     if (b.dataset.cal != null) {
@@ -387,6 +392,8 @@ function viewHome() {
       <a class="btn dark big" href="#/song/${encodeURIComponent(last.id)}/practice${sl && sl.songs.some((x) => x.id === last.id) ? '?sl=1' : ''}">${icon.play} Üben</a>
     </section>` : ''}
 
+    ${midiCard()}
+
     <div class="h2-row"><h2 class="h2">Setlist aus Planning Center ${sl ? `<span class="muted small">${esc(sl.title)}${sl.date ? ' · ' + esc(sl.date) : ''}</span>` : ''}</h2>
       ${sl ? '<div class="row-gap"><button class="btn ghost" data-act="pco-reload">Aktualisieren</button><button class="btn ghost" data-act="pco-plans">Andere wählen</button></div>' : ''}</div>
     ${sl ? `
@@ -432,6 +439,13 @@ function viewHome() {
       return;
     }
     switch (b.dataset.act) {
+      case 'midi-copy':
+        (navigator.clipboard ? navigator.clipboard.writeText(appUrl()) : Promise.reject()).then(
+          () => toast('Link kopiert – jetzt MIDIWeb öffnen und in die Adresszeile einfügen'),
+          () => { window.prompt('Diesen Link in MIDIWeb einfügen:', appUrl()); });
+        return;
+      case 'midi-hide': setSettings({ hideMidiHint: true }); return viewHome();
+      case 'midi-settings': return openSettings(() => viewHome(), 'midi');
       case 'settings': return openSettings(() => viewHome());
       case 'pco-next': return loadNextPlan();
       case 'pco-plans': return openPlanPicker();
@@ -439,7 +453,29 @@ function viewHome() {
       case 'pco-reload': return reloadSetlist();
     }
   };
-  cleanup = () => { app.onclick = null; };
+  const offMidi = midi.on((ev) => { if (ev.type === 'devices' || ev.type === 'state') viewHome(); });
+  cleanup = () => { app.onclick = null; offMidi(); };
+}
+
+/** Hinweis bzw. Status zum MIDI-Keyboard auf der Startseite. */
+function midiCard() {
+  if (settings.midi === false) return '';
+  if (midi.supported) {
+    return midi.connected
+      ? `<section class="midi-card ok"><span>🎹</span><p><b>${esc(midi.devices[0])} verbunden</b> – deine Tasten werden erkannt. In der Übungsansicht: „Warten bis richtig“.</p></section>`
+      : `<section class="midi-card"><span>🎹</span><p><b>Kein MIDI-Keyboard gefunden.</b> USB-Kabel ans Piano (eckige Buchse) und ans iPad stecken, Piano einschalten.</p><button class="btn ghost" data-act="midi-settings">Hilfe</button></section>`;
+  }
+  if (!isIOS() || settings.hideMidiHint) return '';
+  return `<section class="midi-card hint">
+    <span>🎹</span>
+    <div><p><b>Mit deinem Digitalpiano üben?</b> Safari kann kein MIDI. Öffne Keys2Worship im kostenlosen <b>MIDIWeb Browser</b> – dann erkennt die App, welche Tasten du drückst.</p>
+      <p class="small muted">Schon installiert? „Link kopieren“ antippen, MIDIWeb öffnen und den Link oben in die Adresszeile einfügen. Tipp: Dort als Favorit speichern.</p>
+      <div class="row-gap wrap">
+        <a class="btn primary" href="${MIDIWEB_STORE}" target="_blank" rel="noopener">MIDIWeb im App Store</a>
+        <button class="btn" data-act="midi-copy">Link kopieren</button>
+        <button class="btn ghost" data-act="midi-hide">Ausblenden</button>
+      </div></div>
+  </section>`;
 }
 
 async function reloadSetlist() {
