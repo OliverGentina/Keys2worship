@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keys2Worship – Chara-API-Test</title>
+<style>
+  body { margin: 0; padding: 24px; font: 16px/1.5 -apple-system, system-ui, sans-serif; background: #fff; color: #111; max-width: 900px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .muted { color: #555; }
+  label { display: block; margin: 12px 0 4px; font-weight: 600; }
+  input { font: inherit; width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #ccc; border-radius: 10px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row input { flex: 1; }
+  button, a.btn { font: inherit; font-weight: 600; padding: 12px 18px; border-radius: 12px; border: 0; background: #f5b83d; color: #1a1206; margin: 8px 8px 4px 0; text-decoration: none; display: inline-block; }
+  button.sec { background: #e5e7eb; }
+  button:disabled { opacity: .5; }
+  .res { border-radius: 10px; margin: 10px 0; padding: 8px 12px; background: #f3f4f6; }
+  .res.ok { background: #dcfce7; } .res.bad { background: #fee2e2; } .res.warn { background: #fef9c3; }
+  .res b { font-family: ui-monospace, Menlo, monospace; font-size: 14px; }
+  pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; margin: 6px 0 0; max-height: 320px; overflow: auto; }
+  #summary { font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Chara Technics – API-Test</h1>
+<p class="muted">Probiert die REST-API von Chara Technics aus und zeigt die Antworten. Danach „Bericht kopieren“ drücken und den Text an Claude schicken. Der Schlüssel steht nicht im Bericht.</p>
+
+<label for="base">API-Adresse</label>
+<input id="base" value="https://technics.chara.church/api/v1" autocapitalize="off" autocorrect="off" spellcheck="false">
+
+<label for="key">API-Schlüssel (cta_…)</label>
+<input id="key" type="password" placeholder="cta_…" autocapitalize="off" autocorrect="off" spellcheck="false">
+<p class="muted small"><label style="display:inline;font-weight:400"><input id="remember" type="checkbox" style="width:auto"> auf diesem Gerät merken</label></p>
+
+<button id="run" type="button">▶ Durchprobieren</button>
+<button id="copy" type="button" class="sec">Bericht kopieren</button>
+<a class="btn" href="./" style="background:#e5e7eb">Zur App</a>
+
+<label for="own">Eigene Adresse testen (Teil nach /api/v1)</label>
+<div class="row"><input id="own" placeholder="/songs?search=Way" autocapitalize="off" autocorrect="off" spellcheck="false"><button id="ownBtn" type="button" class="sec" style="margin:0">Laden</button></div>
+
+<p id="summary"></p>
+<div id="out"></div>
+
+<script>
+(function () {
+  var LS = 'keys2worship:charakey';
+  var $ = function (id) { return document.getElementById(id); };
+  var report = [];
+  try { var saved = localStorage.getItem(LS); if (saved) { $('key').value = saved; $('remember').checked = true; } } catch (e) {}
+
+  function base() { return $('base').value.trim().replace(/\/+$/, ''); }
+  function origin() { try { return new URL(base()).origin; } catch (e) { return ''; } }
+
+  // Große Antworten kürzen: Listen auf 2 Einträge, lange Texte auf 1500 Zeichen
+  function shrink(v, depth) {
+    depth = depth || 0;
+    if (Array.isArray(v)) {
+      var a = v.slice(0, 2).map(function (x) { return shrink(x, depth + 1); });
+      if (v.length > 2) a.push('… (' + v.length + ' Einträge insgesamt)');
+      return a;
+    }
+    if (v && typeof v === 'object') {
+      if (depth > 6) return '{…}';
+      var o = {}; Object.keys(v).forEach(function (k) { o[k] = shrink(v[k], depth + 1); }); return o;
+    }
+    if (typeof v === 'string' && v.length > 1500) return v.slice(0, 1500) + ' …(' + v.length + ' Zeichen)';
+    return v;
+  }
+
+  // Liste in einer Antwort finden (direkt, data, items, results, oder erstes Array-Feld)
+  function listOf(j) {
+    if (Array.isArray(j)) return j;
+    if (!j || typeof j !== 'object') return null;
+    var keys = ['data', 'items', 'results', 'plans', 'setlists', 'songs', 'events'];
+    for (var i = 0; i < keys.length; i++) if (Array.isArray(j[keys[i]])) return j[keys[i]];
+    for (var k in j) if (Array.isArray(j[k])) return j[k];
+    return null;
+  }
+  function idOf(x) { return x && (x.id != null ? x.id : x.uuid != null ? x.uuid : x._id != null ? x._id : x.slug); }
+
+  function show(path, cls, head, body) {
+    var d = document.createElement('div'); d.className = 'res ' + cls;
+    var b = document.createElement('b'); b.textContent = path; d.appendChild(b);
+    d.appendChild(document.createTextNode(' – ' + head));
+    if (body) { var p = document.createElement('pre'); p.textContent = body; d.appendChild(p); }
+    $('out').appendChild(d);
+    report.push('### ' + path + ' – ' + head + (body ? '\n' + body : ''));
+  }
+
+  async function probe(path, opts) {
+    opts = opts || {};
+    var url = path.indexOf('http') === 0 ? path : (opts.root ? origin() : base()) + path;
+    var label = opts.root ? url.replace(origin(), '') : path;
+    var headers = { Accept: 'application/json' };
+    if ($('key').value.trim()) headers.Authorization = 'Bearer ' + $('key').value.trim();
+    try {
+      var res = await fetch(url, { headers: headers });
+      var ct = res.headers.get('content-type') || '';
+      var text = await res.text();
+      var json = null; try { json = JSON.parse(text); } catch (e) {}
+      var body = json != null ? JSON.stringify(shrink(json), null, 2) : (opts.quiet && !res.ok ? '' : text.slice(0, 800));
+      if (/<html/i.test(text) && json == null) body = '(HTML-Seite, ' + text.length + ' Zeichen)';
+      show(label, res.ok ? 'ok' : (res.status === 404 ? 'warn' : 'bad'), 'HTTP ' + res.status + (ct ? ' · ' + ct.split(';')[0] : ''), body);
+      return { ok: res.ok, status: res.status, json: json };
+    } catch (e) {
+      show(label, 'bad', 'blockiert – keine Antwort lesbar (CORS oder Netz): ' + (e.message || e));
+      return { ok: false, status: 0, blocked: true };
+    }
+  }
+
+  async function run() {
+    var key = $('key').value.trim();
+    try { if ($('remember').checked && key) localStorage.setItem(LS, key); else localStorage.removeItem(LS); } catch (e) {}
+    $('out').innerHTML = ''; report = [];
+    $('run').disabled = true; $('summary').textContent = 'Läuft …';
+    report.push('Chara-API-Test · ' + new Date().toLocaleString('de-DE') + ' · Seite: ' + location.origin + ' · API: ' + base() + ' · Schlüssel: ' + (key ? 'ja (' + key.slice(0, 4) + '…)' : 'nein'));
+
+    var stats = { ok: 0, blocked: 0 };
+    async function p(path, o) { var r = await probe(path, o); if (r.ok) stats.ok++; if (r.blocked) stats.blocked++; return r; }
+
+    // Doku-Adressen
+    for (var d of ['/openapi.json', '/swagger.json', '/docs']) await p(d, { quiet: true });
+    for (var r0 of ['/api/openapi.json', '/api/docs', '/openapi.json']) await p(r0, { root: true, quiet: true });
+    await p('');
+    await p('/me');
+
+    // Listen und je ein Beispiel-Eintrag
+    var groups = {
+      '/plans': ['', '/setlist', '/songs', '/items'],
+      '/setlists': ['', '/songs', '/items'],
+      '/songs': ['', '/chordpro', '/arrangements'],
+      '/events': [''],
+    };
+    for (var g in groups) {
+      var r = await p(g);
+      var list = r.ok ? listOf(r.json) : null;
+      var id = list && list.length ? idOf(list[0]) : null;
+      if (id != null) for (var sub of groups[g]) await p(g + '/' + encodeURIComponent(id) + sub);
+    }
+
+    $('run').disabled = false;
+    $('summary').textContent = stats.blocked && !stats.ok
+      ? '✗ Alle Anfragen blockiert – vermutlich ist CORS für ' + location.origin + ' nicht freigegeben.'
+      : '✓ Fertig: ' + stats.ok + ' Adressen haben geantwortet. Jetzt „Bericht kopieren“ und an Claude schicken.';
+  }
+
+  $('run').onclick = run;
+  $('ownBtn').onclick = function () { var v = $('own').value.trim(); if (v) probe(v.charAt(0) === '/' ? v : '/' + v); };
+  $('copy').onclick = async function () {
+    var text = report.join('\n\n') || 'Noch nichts getestet.';
+    var key = $('key').value.trim(); if (key) text = text.split(key).join('[SCHLÜSSEL]');
+    try { await navigator.clipboard.writeText(text); $('copy').textContent = '✓ Kopiert'; }
+    catch (e) { var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); $('copy').textContent = '✓ Kopiert'; }
+    setTimeout(function () { $('copy').textContent = 'Bericht kopieren'; }, 2000);
+  };
+})();
+</script>
+</body>
+</html>
