@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keys2Worship – Kamera-Test</title>
+<style>
+  body { margin: 0; padding: 24px; font: 16px/1.5 -apple-system, system-ui, sans-serif; background: #fff; color: #111; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .muted { color: #555; }
+  ul { list-style: none; padding: 0; margin: 16px 0; }
+  li { padding: 8px 12px; border-radius: 10px; margin-bottom: 6px; background: #f3f4f6; }
+  li.ok { background: #dcfce7; } li.bad { background: #fee2e2; } li.info { background: #eef2ff; }
+  button, a.btn, select { font: inherit; font-weight: 600; padding: 12px 18px; border-radius: 12px; border: 0; background: #f5b83d; color: #1a1206; margin: 4px 8px 4px 0; text-decoration: none; display: inline-block; }
+  select { background: #f3f4f6; max-width: 100%; }
+  button.sec { background: #e5e7eb; }
+  #stage { margin-top: 12px; background: #111; border-radius: 14px; overflow: hidden; max-width: 960px; }
+  video { display: block; width: 100%; height: auto; }
+  video.mirror { transform: scaleX(-1); }
+  video.flip { transform: rotate(180deg); }
+  video.mirror.flip { transform: rotate(180deg) scaleX(-1); }
+  #info { font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>Keys2Worship – Kamera-Test</h1>
+<p class="muted">Prüft, ob dieser Browser eine externe Kamera (z. B. Logitech StreamCam) sieht. Seite einmal in Safari und einmal in MIDIWeb öffnen und jeweils ein Bildschirmfoto schicken.</p>
+<ul id="list"><li class="bad">JavaScript läuft nicht.</li></ul>
+<p>
+  <button id="startBtn" type="button">Kamera starten</button>
+  <select id="camSel" hidden></select>
+  <button id="mirrorBtn" class="sec" type="button" hidden>Spiegeln</button>
+  <button id="flipBtn" class="sec" type="button" hidden>Um 180° drehen</button>
+  <button id="stopBtn" class="sec" type="button" hidden>Stopp</button>
+  <a class="btn" href="./">Zur App</a>
+</p>
+<div id="info" class="muted"></div>
+<div id="stage" hidden><video id="video" playsinline autoplay muted></video></div>
+<script>
+  var list = document.getElementById('list');
+  var sel = document.getElementById('camSel');
+  var video = document.getElementById('video');
+  var info = document.getElementById('info');
+  var stream = null;
+  var KEY = 'k2w-camera-id';
+  list.innerHTML = '';
+  function add(cls, text) { var li = document.createElement('li'); li.className = cls; li.textContent = text; list.appendChild(li); return li; }
+  function check(name, ok, extra) { return add(ok ? 'ok' : 'bad', (ok ? '✓ ' : '✗ ') + name + (extra ? ' – ' + extra : '')); }
+  function show(el, on) { el.hidden = !on; }
+
+  add('ok', '✓ JavaScript läuft');
+  add('info', 'Browser: ' + navigator.userAgent);
+  check('Sichere Verbindung (HTTPS)', window.isSecureContext, window.isSecureContext ? '' : 'Kamera geht nur über https://');
+  var hasMD = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  check('Kamera-Schnittstelle (getUserMedia)', hasMD, hasMD ? '' : 'fehlt – dieser Browser gibt Webseiten keinen Kamerazugriff');
+  check('Web MIDI (zum Vergleich)', !!navigator.requestMIDIAccess, navigator.requestMIDIAccess ? '' : 'fehlt – in Safari normal');
+
+  var camLine = null;
+  function isExternal(label) {
+    label = (label || '').toLowerCase();
+    if (!label) return false;
+    return !/(front|back|rück|vorder|ultra|tele|weitwinkel|wide|true ?depth|facetime|integriert|built-in)/.test(label);
+  }
+
+  function listCams() {
+    return navigator.mediaDevices.enumerateDevices().then(function (devs) {
+      var cams = devs.filter(function (d) { return d.kind === 'videoinput'; });
+      sel.innerHTML = '';
+      var ext = [];
+      cams.forEach(function (c, i) {
+        var o = document.createElement('option');
+        o.value = c.deviceId;
+        var label = c.label || ('Kamera ' + (i + 1));
+        if (isExternal(c.label)) { ext.push(label); label += '  (extern)'; }
+        o.textContent = label;
+        sel.appendChild(o);
+      });
+      if (camLine) camLine.remove();
+      camLine = check('Gefundene Kameras: ' + cams.length, cams.length > 0,
+        cams.map(function (c, i) { return c.label || ('Kamera ' + (i + 1)); }).join(', ') || 'keine');
+      if (ext.length) check('Externe Kamera erkannt', true, ext.join(', '));
+      else if (cams.length) add('info', 'ℹ Keine externe Kamera erkannt. Kabel prüfen und Seite neu laden.');
+      show(sel, cams.length > 0);
+      return cams;
+    });
+  }
+
+  function stop() {
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    stream = null;
+    video.srcObject = null;
+  }
+
+  function start(deviceId) {
+    stop();
+    var c = { audio: false, video: deviceId
+      ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+      : { width: { ideal: 1920 }, height: { ideal: 1080 } } };
+    return navigator.mediaDevices.getUserMedia(c).then(function (s) {
+      stream = s;
+      video.srcObject = s;
+      var t = s.getVideoTracks()[0];
+      var st = t.getSettings ? t.getSettings() : {};
+      info.textContent = 'Läuft: ' + (t.label || 'Kamera') + (st.width ? ' · ' + st.width + ' × ' + st.height : '') + (st.frameRate ? ' · ' + Math.round(st.frameRate) + ' fps' : '');
+      if (st.deviceId) { sel.value = st.deviceId; try { localStorage.setItem(KEY, st.deviceId); } catch (e) {} }
+      show(document.getElementById('stage'), true);
+      ['mirrorBtn', 'flipBtn', 'stopBtn'].forEach(function (id) { show(document.getElementById(id), true); });
+    });
+  }
+
+  function fail(e) {
+    var n = e && e.name;
+    var msg = n === 'NotAllowedError' ? 'Zugriff verweigert – in den iPad-Einstellungen Kamera für diesen Browser erlauben'
+      : n === 'NotFoundError' ? 'keine Kamera gefunden'
+      : n === 'NotReadableError' ? 'Kamera wird gerade von einer anderen App benutzt (z. B. FaceTime schließen)'
+      : n === 'OverconstrainedError' ? 'gewählte Kamera nicht verfügbar'
+      : String(e && e.message || e);
+    check('Kamera starten', false, msg);
+  }
+
+  document.getElementById('startBtn').onclick = function () {
+    if (!hasMD) { fail({ message: 'Keine Kamera-Schnittstelle in diesem Browser.' }); return; }
+    // Erst Erlaubnis holen – vorher liefert iOS keine Kameranamen
+    var saved = null; try { saved = localStorage.getItem(KEY); } catch (e) {}
+    start(saved).catch(function () { return start(null); })
+      .then(listCams)
+      .then(function (cams) {
+        // Externe Kamera automatisch wählen, wenn noch keine gespeichert ist
+        if (!saved) {
+          var ext = cams.filter(function (c) { return isExternal(c.label); })[0];
+          if (ext) return start(ext.deviceId);
+        }
+      })
+      .catch(fail);
+  };
+  sel.onchange = function () { start(sel.value).catch(fail); };
+  document.getElementById('mirrorBtn').onclick = function () { video.classList.toggle('mirror'); };
+  document.getElementById('flipBtn').onclick = function () { video.classList.toggle('flip'); };
+  document.getElementById('stopBtn').onclick = function () { stop(); info.textContent = 'Gestoppt.'; show(document.getElementById('stage'), false); };
+  if (hasMD && navigator.mediaDevices.addEventListener) {
+    navigator.mediaDevices.addEventListener('devicechange', function () { add('info', 'ℹ Kamera an- oder abgesteckt.'); listCams(); });
+  }
+</script>
+</body>
+</html>
