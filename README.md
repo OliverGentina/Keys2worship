@@ -2,7 +2,9 @@
 
 Eine Web-App fürs iPad (und iPhone), mit der man ohne Vorkenntnisse lernt, Lobpreislieder auf dem Klavier zu begleiten. Der Fokus liegt auf **fließenden Akkordwechseln mit möglichst wenig Handbewegung**.
 
-## Was die App kann (v0.5)
+## Was die App kann (v0.6)
+
+- **Kamera / AR-Modus** (neu): externe USB-C-Kamera (z. B. Logitech StreamCam) von oben auf die echte Tastatur. In der Übungsansicht „📷 Kamera“ antippen. Einmal kalibrieren (vier Ecken ziehen, dann ganz linke und ganz rechte Taste im Bild am Piano drücken) – danach liegen Fingernummern, Zielkreise, Pfeile und „bleibt“ direkt auf den Tasten im Bild; per MIDI gedrückte Tasten leuchten grün/rot. Einstellungen › Kamera: Kamera wählen, 180° drehen, spiegeln, Deckkraft, virtuelle Klaviatur zusätzlich. Läuft in Safari und im MIDIWeb Browser.
 
 - **MIDI-Keyboard** (z. B. Roland-Digitalpiano per USB): gedrückte Tasten grün/rot, „✓ Richtig!“, Warte-Modus „Warten bis richtig“. Auf dem iPad im kostenlosen *MIDIWeb Browser* öffnen (Safari kann kein Web MIDI), am Rechner in Chrome.
 

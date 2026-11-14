@@ -1,2 +1,2 @@
 // Versionsnummer der App – bei jeder Veröffentlichung erhöhen (auch VERSION in sw.js).
-export const VERSION = '0.5.3';
+export const VERSION = '0.6.0';

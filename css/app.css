@@ -332,3 +332,38 @@ details summary { color: var(--muted); cursor: pointer; padding: 6px 0; }
 #bootError { position: fixed; inset: 0; z-index: 9999; background: #fff; color: #111; padding: 32px 24px; font: 16px/1.5 -apple-system, system-ui, sans-serif; overflow: auto; }
 #bootError pre { white-space: pre-wrap; word-break: break-all; background: #f3f4f6; padding: 12px; border-radius: 10px; font-size: 12px; }
 #bootError a { color: #b45309; font-weight: 600; }
+
+/* Kamera / AR-Modus */
+.cam-wrap { flex: 1; min-height: 200px; display: flex; flex-direction: column; }
+.cam-wrap[hidden] { display: none; }
+.cam { position: relative; }
+.cam-stage { position: relative; flex: 1; min-height: 200px; border-radius: 16px; overflow: hidden; background: #000; border: 1px solid var(--line); touch-action: none; user-select: none; -webkit-user-select: none; }
+.cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.cam-overlay { position: absolute; inset: 0; pointer-events: none; }
+.cam-badge { position: absolute; left: 12px; top: 12px; display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: rgba(11,18,32,.82); font-size: 13px; font-weight: 600; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 3; }
+.cam-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.cam-badge.live .cam-dot { background: #F87171; }
+.cam-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; background: rgba(11,18,32,.9); z-index: 4; }
+.cam-msg[hidden] { display: none; }
+.cam-msg p { max-width: 520px; margin: 0; }
+.cam-out { position: absolute; left: 12px; right: 12px; bottom: 12px; padding: 8px 12px; border-radius: 12px; background: rgba(127,29,29,.88); color: #FEE2E2; font-size: 13px; font-weight: 600; z-index: 3; }
+.cam-calib { position: absolute; inset: 0; z-index: 5; }
+.cam-calib[hidden] { display: none; }
+.cam-handle { position: absolute; left: 0; top: 0; width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0; background: var(--accent); box-shadow: 0 0 0 6px rgba(245,184,61,.3); display: flex; align-items: center; justify-content: center; touch-action: none; cursor: grab; }
+.cam-handle span { width: 12px; height: 12px; border-radius: 50%; background: var(--accent-ink); }
+.cam-handle.drag { box-shadow: 0 0 0 12px rgba(245,184,61,.35); }
+.cam-panel { position: absolute; right: 12px; top: 12px; width: min(340px, calc(100% - 24px)); display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 16px; background: rgba(19,28,46,.95); border: 2px solid var(--accent); }
+.cam-panel .row-gap { justify-content: flex-end; }
+.cam-range { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 6px 8px; }
+.cam-note { text-align: center; font-family: var(--chord); font-size: 18px; }
+.cam-tools { display: inline-flex; gap: 8px; align-items: center; }
+.cam-tools[hidden] { display: none; }
+.practice.cam-on .legend { display: none; }
+.practice.cam-on .kb-wrap.kb-mini { flex: 0 0 150px; min-height: 120px; }
+.practice.cam-on .kb-wrap:not(.kb-mini), .practice.cam-on.no-kb .zoom, .practice.cam-on.no-kb .bk-tools { display: none; }
+.trow input[type="range"] { width: 100%; }
+.cam-panel[data-pos="tl"] { right: auto; left: 12px; top: 52px; }
+.cam-panel[data-pos="br"] { top: auto; bottom: 12px; }
+.cam-panel[data-pos="bl"] { top: auto; bottom: 12px; right: auto; left: 12px; }
+.cam-panel[data-pos="tc"] { right: auto; left: 50%; transform: translateX(-50%); }
+.cam-panel[data-pos="bc"] { right: auto; left: 50%; top: auto; bottom: 12px; transform: translateX(-50%); }

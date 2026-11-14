@@ -7,11 +7,15 @@ import { VERSION } from './version.js';
 import { initSplash } from './splash.js';
 import * as pco from './pco.js';
 import { MidiInput, checkChord } from './midi.js';
+import { CameraView, listCameras, cameraSupported } from './camera.js';
 
 const app = document.getElementById('app');
 const engine = new SoundEngine();
 let settings = store.loadSettings();
 settings.zoom = Object.assign({ rechts: 1, links: 1, beide: 0 }, settings.zoom || {});
+settings.cam = Object.assign({}, store.DEFAULT_SETTINGS.cam, settings.cam || {});
+const setCam = (patch) => setSettings({ cam: Object.assign({}, settings.cam, patch) });
+let camList = []; // zuletzt gefundene Kameras (für die Einstellungen)
 const pxPerMm = () => settings.pxPerMm || estimatePxPerMm();
 const realKeyPx = () => pxPerMm() * REAL_KEY_MM;
 const withBass = (s) => [s.bass, ...s.notes];
@@ -73,7 +77,7 @@ window.addEventListener('hashchange', route);
 const SOUND_NAMES = { piano: 'Klavier', rhodes: 'Rhodes', off: 'Aus' };
 const HAND_NAMES = { rechts: 'Rechte Hand', links: 'Linke Hand', beide: 'Beide Hände' };
 
-function openSettings(onChange, startPage = 'main') {
+function openSettings(onChange, startPage = 'main', extra = {}) {
   const d = document.getElementById('settings');
   let page = startPage;
   const changed = () => { onChange && onChange(); };
@@ -85,6 +89,7 @@ function openSettings(onChange, startPage = 'main') {
         <small>${pco.isConnected() ? `Verbunden${pco.userName() ? ' als ' + esc(pco.userName()) : ''} · Setlist & Lieder` : 'Setlist laden, Lieder holen'}</small></span><span class="mc">›</span></button>
       <div class="menu">
         <button class="mrow" data-go="keys"><span class="mi">🎹</span><span class="mt"><b>Klaviatur</b><small>${HAND_NAMES[settings.hand]} · ${pct(settings.zoom[settings.hand])}</small></span><span class="mc">›</span></button>
+        <button class="mrow" data-go="cam"><span class="mi">📷</span><span class="mt"><b>Kamera</b><small>${camSummary()}</small></span><span class="mc">›</span></button>
         <button class="mrow" data-go="metro"><span class="mi">♩</span><span class="mt"><b>Metronom &amp; Gleiten</b><small>Klick ${settings.click !== false ? 'an' : 'aus'} · Finger gleiten ${settings.glideBeats} ${settings.glideBeats === 1 ? 'Schlag' : 'Schläge'} vorher</small></span><span class="mc">›</span></button>
         <button class="mrow" data-go="midi"><span class="mi">🎹</span><span class="mt"><b>MIDI-Keyboard</b><small>${midiSummary()}</small></span><span class="mc">›</span></button>
         <button class="mrow" data-go="sound"><span class="mi">🎚</span><span class="mt"><b>Klang</b><small>${SOUND_NAMES[settings.sound]} · ${Math.round(settings.volume * 100)} %</small></span><span class="mc">›</span></button>
@@ -160,6 +165,34 @@ function openSettings(onChange, startPage = 'main') {
       <div class="group"><p><b>Anschließen</b></p>
         <p class="small">USB-Kabel von der eckigen USB-Buchse („Computer“/„USB to Host“) am Piano zum iPad – mit USB-C-Kabel bzw. Lightning-auf-USB-Kamera-Adapter. Piano einschalten, dann die App öffnen.</p></div>` },
 
+    cam: { title: 'Kamera', html: () => {
+      const c = settings.cam;
+      const tg = (id, on, title, sub) => `<label class="trow"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span><b>${title}</b><small>${sub}</small></span></label>`;
+      if (!cameraSupported()) return '<p>Dieser Browser gibt Webseiten keinen Kamerazugriff. In Safari und im MIDIWeb Browser auf dem iPad funktioniert es.</p>';
+      return `
+      <p class="small muted">Eine Kamera von oben auf deine echte Tastatur – die App zeichnet Fingernummern, Zielkreise und Pfeile direkt ins Bild. In der Übungsansicht über der Klaviatur auf „Kamera“ tippen.</p>
+      <div class="group">
+        <label class="field"><span>Kamera</span>
+          <select class="input" id="camSel">${camList.length ? camList.map((d) => `<option value="${esc(d.id)}" ${d.id === c.deviceId ? 'selected' : ''}>${esc(d.label)}${d.external ? ' (extern)' : ''}</option>`).join('') : '<option value="">Automatisch (externe bevorzugt)</option>'}</select></label>
+        <button class="btn" data-cam-find>Kameras suchen</button>
+      </div>
+      <div class="group">
+        ${tg('camRot', c.rotate, 'Um 180° drehen', 'Kamera hängt hinter der Tastatur und schaut zu dir')}
+        ${tg('camMir', c.mirror, 'Bild spiegeln', 'Nur nötig, wenn tiefe Töne im Bild rechts liegen')}
+        ${tg('camFing', c.fingers !== false, 'Fingernummern', 'Farbige Kreise auf den Tasten')}
+        ${tg('camAids', c.aids !== false, 'Zielkreise &amp; Pfeile', 'Wohin die Finger beim nächsten Akkord wandern')}
+        ${tg('camKb', c.kbToo, 'Virtuelle Klaviatur darunter', 'Zusätzlich zum Kamerabild')}
+        <label class="field"><span id="camOpLbl">Deckkraft der Einblendungen · ${Math.round((c.opacity ?? 0.8) * 100)} %</span><input type="range" id="camOp" min="0.3" max="1" step="0.05" value="${c.opacity ?? 0.8}"></label>
+      </div>
+      <div class="group">
+        <span class="field-label">Kalibrierung</span>
+        <span class="small muted">${c.calib ? 'Kalibriert. ' : 'Noch nicht kalibriert. '}Nach dem Verschieben der Kamera oder nach Drehen/Spiegeln neu kalibrieren.</span>
+        <button class="btn ${c.calib ? '' : 'primary'}" data-cam-calib>Kalibrierung starten</button>
+      </div>
+      <div class="group"><p><b>So hängt die Kamera am besten</b></p>
+        <p class="small">Hinter der Tastatur (z. B. am Notenpult), leicht schräg von oben, mittig über dem Bereich, in dem die rechte Hand spielt. Gleichmäßiges Licht, kein Gegenlicht vom Fenster.</p></div>`;
+    } },
+
     notation: { title: 'Notenschrift', html: () => `
       <div class="group">
         <label class="trow"><input type="radio" name="nt" value="de" ${settings.notation === 'de' ? 'checked' : ''}><span><b>Deutsch</b><small>H, Hm, Fis, B (= englisch Bb)</small></span></label>
@@ -202,13 +235,23 @@ function openSettings(onChange, startPage = 'main') {
     if (!b) return;
     if (b.dataset.close != null) return d.close();
     if (b.dataset.back != null) { page = 'main'; return render(); }
-    if (b.dataset.go) { page = b.dataset.go; return render(); }
+    if (b.dataset.go) {
+      page = b.dataset.go; render();
+      if (page === 'cam') listCameras().then((l) => { if (l.some((x) => x.label)) { camList = l; if (page === 'cam') render(); } }).catch(() => {});
+      return;
+    }
     if (b.dataset.pco) {
       const a = b.dataset.pco;
       if (a === 'logout') { pco.disconnect(); render(); return changed(); }
       if (a === 'login') return pco.login('settings');
       d.close();
       return a === 'next' ? loadNextPlan() : a === 'plans' ? openPlanPicker() : openSongSearch();
+    }
+    if (b.dataset.camFind != null) { b.textContent = 'Suche …'; return listCameras(true).then((l) => { camList = l; render(); }); }
+    if (b.dataset.camCalib != null) {
+      d.close();
+      if (extra.onCalibrate) return extra.onCalibrate();
+      return toast('Öffne ein Lied zum Üben, tippe auf „Kamera“ und dann auf „Kalibrieren“.');
     }
     if (b.dataset.midiCopy != null) { navigator.clipboard?.writeText(appUrl()).then(() => toast('Link kopiert – in MIDIWeb einfügen')); setSettings({ hideMidiHint: false }); return; }
     if (b.dataset.setHand) { setSettings({ hand: b.dataset.setHand }); render(); return changed(); }
@@ -230,9 +273,21 @@ function openSettings(onChange, startPage = 'main') {
     if (e.target.id === 'clickOn') { setSettings({ click: e.target.checked }); changed(); }
     if (e.target.id === 'midiOn') { setSettings({ midi: e.target.checked }); if (e.target.checked) midi.start().then(render); changed(); }
     if (e.target.id === 'midiEcho') { setSettings({ midiEcho: e.target.checked }); changed(); }
+    const camKeys = { camRot: 'rotate', camMir: 'mirror', camFing: 'fingers', camAids: 'aids', camKb: 'kbToo' };
+    if (camKeys[e.target.id]) { setCam({ [camKeys[e.target.id]]: e.target.checked }); changed(); }
+    if (e.target.id === 'camOp') { setCam({ opacity: +e.target.value }); d.querySelector('#camOpLbl').textContent = `Deckkraft der Einblendungen · ${Math.round(settings.cam.opacity * 100)} %`; changed(); }
+    if (e.target.id === 'camSel') { setCam({ deviceId: e.target.value || null }); changed(); }
   };
   render();
   if (!d.open) d.showModal();
+  if (page === 'cam' || page === 'main') listCameras().then((l) => { if (l.length && l.some((x) => x.label)) { camList = l; if (page === 'cam') render(); } }).catch(() => {});
+}
+
+function camSummary() {
+  if (!cameraSupported()) return 'In diesem Browser nicht möglich';
+  const c = settings.cam;
+  const dev = camList.find((x) => x.id === c.deviceId);
+  return (dev ? dev.label : 'Externe Kamera bevorzugt') + (c.calib ? ' · kalibriert' : ' · nicht kalibriert');
 }
 
 function midiSummary() {
@@ -698,8 +753,12 @@ function viewPractice(id, q) {
     ${P.invalid.length ? `<p class="warn">Nicht erkannt und übersprungen: ${P.invalid.map(esc).join(', ')}</p>` : ''}
     <section class="kb-area">
       <div class="kb-tools">
-        <div class="seg small" role="group" aria-label="Hand" data-group="hand">
-          <button data-hand="rechts">Rechte Hand</button><button data-hand="links">Linke Hand</button><button data-hand="beide">Beide</button>
+        <div class="row-gap">
+          <div class="seg small" role="group" aria-label="Hand" data-group="hand">
+            <button data-hand="rechts">Rechte Hand</button><button data-hand="links">Linke Hand</button><button data-hand="beide">Beide</button>
+          </div>
+          ${cameraSupported() ? `<div class="seg small" role="group" aria-label="Ansicht" data-group="view"><button data-view="kb">Klaviatur</button><button data-view="cam">📷 Kamera</button></div>
+          <span class="cam-tools" id="camTools" hidden><button class="btn ghost small-btn" data-act="cam-calib">Kalibrieren</button></span>` : ''}
         </div>
         <div class="row-gap midi-tools" id="midiTools" hidden>
           <span class="midi-chip" id="midiChip"></span>
@@ -716,6 +775,7 @@ function viewPractice(id, q) {
         </div>
       </div>
       <div class="kb-wrap" id="kbWrap"></div>
+      <div class="cam-wrap" id="camWrap" hidden></div>
     </section>
     <footer class="legend hide-short">
       <div class="row-gap">${[1, 2, 3, 4, 5].map((n) => `<span class="lg"><span class="dot" style="background:${FINGER.bright[n]}">${n}</span>${FINGER_NAMES[n]}</span>`).join('')}</div>
@@ -749,6 +809,48 @@ function viewPractice(id, q) {
   ro.observe(kbWrap);
   applyZoom();
   requestAnimationFrame(applyZoom);
+
+  // ---- Kamera / AR-Modus ----
+  let cam = null, camDevice = null;
+  const calibDone = (saved) => { if (saved) toast('Kalibriert – die Fingernummern liegen jetzt auf deinen Tasten'); update(); };
+  function applyCamMode() {
+    const on = !!settings.cam.on && cameraSupported();
+    const root = $('.practice');
+    root.classList.toggle('cam-on', on);
+    root.classList.toggle('no-kb', on && !settings.cam.kbToo);
+    kbWrap.classList.toggle('kb-mini', on && !!settings.cam.kbToo);
+    $('#camWrap').hidden = !on;
+    if ($('#camTools')) $('#camTools').hidden = !on;
+    $$('[data-group=view] button').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.view === 'cam') === on)));
+    if (on && !cam) {
+      cam = new CameraView($('#camWrap'), {
+        getCam: () => settings.cam, saveCam: setCam,
+        keyName: (m) => noteLabel(m, notation, flats),
+        blackRatio: () => 0.62, // echte Klaviere: schwarze Tasten ≈ 0,62 der sichtbaren Länge der weißen
+      });
+      camDevice = settings.cam.deviceId;
+      cam.start().then((ok) => {
+        camDevice = settings.cam.deviceId;
+        if (ok && !settings.cam.calib && !cam.calibrating) cam.startCalibration(calibDone);
+        update();
+      });
+    } else if (!on && cam) { cam.destroy(); cam = null; }
+    if (cam) {
+      if (settings.cam.deviceId !== camDevice) { camDevice = settings.cam.deviceId; cam.start(); }
+      cam.applyTransform();
+    }
+  }
+  function calibrate() {
+    if (!settings.cam.on) { setCam({ on: true }); applyCamMode(); }
+    cam && cam.startCalibration(calibDone);
+  }
+  function camSettingsChanged() {
+    const before = { rotate: settings.cam.calibRotate, mirror: settings.cam.calibMirror };
+    applyCamMode();
+    if (cam && settings.cam.calib && before.rotate != null && (before.rotate !== !!settings.cam.rotate || before.mirror !== !!settings.cam.mirror)) {
+      toast('Bild gedreht/gespiegelt – bitte neu kalibrieren');
+    }
+  }
 
   const transport = new Transport(engine, {
     getBpm: () => P.bpm,
@@ -824,7 +926,7 @@ function viewPractice(id, q) {
   }
 
   function update() {
-    if (!N()) { kb.update({ cur: null, next: null }); return; }
+    if (!N()) { kb.update({ cur: null, next: null }); if (cam) cam.update({ cur: null, next: null }); return; }
     const aids = P.mode !== 'ohne';
     const showRH = settings.hand !== 'links', showLH = settings.hand !== 'rechts';
     const cur = P.steps[P.idx], nIdx = nextOf(P.idx), next = P.steps[nIdx];
@@ -880,6 +982,7 @@ function viewPractice(id, q) {
     cb.classList.toggle('off', settings.click === false);
     kb.update({ frame: P.frame, cur, next: N() > 1 ? next : null, glide: P.glide, dur: P.glideDur, aids, showRH, showLH,
       focus: settings.hand === 'rechts' ? 'rh' : settings.hand === 'links' ? 'lh' : 'both' });
+    if (cam) cam.update({ cur, next: N() > 1 ? next : null, glide: P.glide, dur: P.glideDur, aids, showRH, showLH });
     $('#waitBtn')?.setAttribute('aria-pressed', String(P.wait));
     paintMidi();
   }
@@ -892,6 +995,7 @@ function viewPractice(id, q) {
     if (b.dataset.sec != null) { P.sec = b.dataset.sec === 'all' ? 'all' : +b.dataset.sec; P.idx = 0; P.pair = 0; computeSteps(); renderStrip(); return restartIfPlaying(); }
     if (b.dataset.mode) { P.mode = b.dataset.mode; P.pair = P.idx; return restartIfPlaying(); }
     if (b.dataset.hand) { setSettings({ hand: b.dataset.hand }); update(); return applyZoom(); }
+    if (b.dataset.view) { setCam({ on: b.dataset.view === 'cam' }); applyCamMode(); update(); return applyZoom(); }
     if (b.dataset.sound) {
       setSettings({ sound: b.dataset.sound });
       if (b.dataset.sound !== 'off' && !P.playing && N()) { const s = P.steps[P.idx]; engine.chord(voice(), withBass(s), null, 0.24, 2); }
@@ -920,7 +1024,8 @@ function viewPractice(id, q) {
       case 'zoom-in': return setZoomPx(kb.W * 1.15);
       case 'zoom-out': return setZoomPx(kb.W / 1.15);
       case 'zoom-real': return setZoomPx(realKeyPx());
-      case 'settings': return openSettings(() => { applyZoom(); update(); });
+      case 'settings': return openSettings(() => { camSettingsChanged(); applyZoom(); update(); }, 'main', { onCalibrate: calibrate });
+      case 'cam-calib': return calibrate();
     }
   };
   // ---- MIDI: gedrückte Tasten zeigen, Akkord prüfen, Warte-Modus ----
@@ -933,10 +1038,11 @@ function viewPractice(id, q) {
     if (!tools) return;
     const show = settings.midi !== false && midi.connected;
     tools.hidden = !show;
-    if (!show || !N()) { kb.setHeld(new Set(), null); return; }
+    if (!show || !N()) { kb.setHeld(new Set(), null); if (cam) cam.setHeld(midi.held, null); return; }
     $('#midiChip').textContent = '🎹 ' + midi.devices[0];
     const target = targetOf(P.steps[P.idx]);
     kb.setHeld(midi.held, new Set(target.map((n) => n % 12)));
+    if (cam) cam.setHeld(midi.held, new Set(target.map((n) => n % 12)));
     const r = checkChord(midi.held, target);
     const c = $('#count');
     if (r.ok) { c.textContent = '✓ Richtig!'; c.classList.add('ok-text'); }
@@ -949,6 +1055,8 @@ function viewPractice(id, q) {
     }
   }
   const offMidi = midi.on((ev) => {
+    // Beim Kalibrieren legt die gedrückte Taste fest, welche Töne im Kamerabild liegen
+    if (cam && cam.calibrating) { cam.onMidi(ev); cam.setHeld(midi.held, null); return; }
     if (ev.type === 'on') P.fresh = true;
     paintMidi();
   });
@@ -960,13 +1068,19 @@ function viewPractice(id, q) {
     if (e.code === 'ArrowLeft') jump(P.idx - 1);
   };
   document.addEventListener('keydown', onKey);
-  const onHide = () => { if (document.hidden && P.playing) stop(); };
+  const onHide = () => {
+    if (document.hidden && P.playing) stop();
+    // iPadOS beendet die Kamera im Hintergrund – beim Zurückkommen neu starten
+    if (!document.hidden && cam && !(cam.stream && cam.stream.getVideoTracks().some((t) => t.readyState === 'live'))) cam.start();
+  };
   document.addEventListener('visibilitychange', onHide);
 
   renderStrip();
+  applyCamMode();
   update();
 
   cleanup = () => {
+    if (cam) { cam.destroy(); cam = null; }
     transport.stop(); clearTimeout(glideTimer); keepAwake(false);
     ro.disconnect(); kb.destroy();
     document.removeEventListener('keydown', onKey);

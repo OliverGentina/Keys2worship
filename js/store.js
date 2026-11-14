@@ -19,6 +19,8 @@ export const DEFAULT_SETTINGS = {
   glideBeats: 1,      // wie viele Schläge vor dem Wechsel die Finger losgleiten
   sound: 'piano',     // 'piano' | 'rhodes' | 'off'
   volume: 0.8,
+  // Kamera / AR-Modus: Fingernummern ins Live-Bild der echten Tastatur
+  cam: { on: false, deviceId: null, rotate: true, mirror: false, fingers: true, aids: true, kbToo: false, opacity: 0.8, calib: null },
 };
 
 const DEMO_SONGS = [

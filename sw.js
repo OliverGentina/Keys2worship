@@ -1,8 +1,8 @@
 // Service Worker: hält die App offline verfügbar. Bei Änderungen VERSION erhöhen.
-const VERSION = 'keys2worship-v0.5.3';
+const VERSION = 'keys2worship-v0.6.0';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
-  './js/app.js', './js/music.js', './js/sound.js', './js/keyboard.js', './js/store.js', './js/splash.js', './js/version.js', './js/pco.js', './js/midi.js', './anleitung.html',
+  './js/app.js', './js/music.js', './js/sound.js', './js/keyboard.js', './js/store.js', './js/splash.js', './js/version.js', './js/pco.js', './js/midi.js', './js/camera.js', './anleitung.html',
   './icons/icon.svg', './icons/chara-logo.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
 ];
 
