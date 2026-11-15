@@ -300,10 +300,18 @@ export async function loadPlan(row, notation) {
   };
 }
 
+/**
+ * Ist dieser Plan-Eintrag ein Lied? Nur dann, wenn er auf ein Lied verweist (song / songId) oder als Lied
+ * markiert ist oder Akkorde (ChordPro) enthält. Punkte wie „Begrüßung“ oder „Küche aufräumen“ fallen raus.
+ */
 function isSongItem(it) {
-  const type = String(pick(it, 'type', 'kind', 'itemType') || '').toLowerCase();
-  if (type) return type === 'song' || !!it.song;
-  return !!(it.song || it.songId || pick(it, 'chart', 'title'));
+  if (!it || typeof it !== 'object') return false;
+  const type = String(pick(it, 'type', 'kind', 'itemType', 'item_type', 'category') || '').toLowerCase();
+  if (/song|lied/.test(type)) return true;
+  const ref = it.song && typeof it.song === 'object' ? pick(it.song, 'id', 'title') : it.song;
+  if (ref || pick(it, 'songId', 'song_id')) return true;
+  if (type) return false; // anderer Typ (Element, Überschrift, Medien …)
+  return !!findChordPro(it);
 }
 
 /** Rohantwort der Setlist (für die Fehlersuche, enthält keine Tokens). */
