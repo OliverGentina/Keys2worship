@@ -113,7 +113,7 @@ function openSettings(onChange, startPage = 'main', extra = {}) {
       <details><summary>Erweitert</summary>
         <div class="group">
           <p class="small muted">Rücksprung-Adresse (redirect_uri):<br><code>${esc(chara.redirectUri())}</code></p>
-          ${chara.isConnected() ? `<div class="row-gap wrap"><button class="btn ghost" data-chara="test">Verbindung testen</button><button class="btn ghost" data-chara="docs">API-Doku kopieren</button></div>
+          ${chara.isConnected() ? `<div class="row-gap wrap"><button class="btn ghost" data-chara="test">Verbindung testen</button><button class="btn ghost" data-chara="docs">API-Doku kopieren</button>${store.loadSetlist()?.source === 'chara' ? '<button class="btn ghost" data-chara="raw">Setlist-Rohdaten kopieren</button>' : ''}</div>
           <pre class="small muted" id="charaOut" style="white-space:pre-wrap;max-height:12rem;overflow:auto"></pre>` : ''}
         </div>
       </details>` },
@@ -264,6 +264,16 @@ function openSettings(onChange, startPage = 'main', extra = {}) {
       const a = b.dataset.chara;
       if (a === 'logout') { chara.disconnect(); render(); return changed(); }
       if (a === 'login') return chara.login('settings');
+      if (a === 'raw') {
+        const out = d.querySelector('#charaOut');
+        out.textContent = 'Lade …';
+        chara.rawSetlist(store.loadSetlist().planId).then((j) => {
+          const t = JSON.stringify(j, null, 2);
+          out.textContent = t.slice(0, 1500) + (t.length > 1500 ? ' …' : '');
+          return navigator.clipboard?.writeText(t).then(() => toast('Rohdaten kopiert – bitte im Chat einfügen'), () => {});
+        }).catch((e) => { out.textContent = chara.errorText(e); });
+        return;
+      }
       if (a === 'test' || a === 'docs') {
         const out = d.querySelector('#charaOut');
         out.textContent = 'Lade …';

@@ -306,6 +306,13 @@ function isSongItem(it) {
   return !!(it.song || it.songId || pick(it, 'chart', 'title'));
 }
 
+/** Rohantwort der Setlist (für die Fehlersuche, enthält keine Tokens). */
+export async function rawSetlist(planId) {
+  const path = `/plans/${encodeURIComponent(planId)}/setlist`;
+  try { return await api(path, { include: 'chart' }); }
+  catch (e) { if (e.status !== 403) throw e; return { hinweis: '403 mit include=chart', ohneChart: await api(path) }; }
+}
+
 // ---------- Lieder ----------
 
 /** Lieder suchen (Titel/Autor), mit Akkorden wenn erlaubt. */
@@ -330,7 +337,7 @@ function songFromItem(it, notation) {
   const song = it.song && typeof it.song === 'object' ? it.song : it;
   const chartObj = pick(it, 'chart', 'song.chart', 'charts.0', 'song.charts.0');
   const chordpro = typeof chartObj === 'string' ? chartObj
-    : pick(chartObj || {}, 'chordpro', 'chordPro', 'content', 'text', 'body', 'source') || pick(it, 'chordpro', 'chordPro') || '';
+    : pick(chartObj || {}, 'chordpro', 'chordPro', 'content', 'text', 'body', 'source') || pick(it, 'chordpro', 'chordPro') || findChordPro(it) || '';
   const pro = parseChordPro(chordpro);
   const keyItem = pick(it, 'key', 'keyName', 'songKey');
   const chartKey = pick(chartObj || {}, 'key') || pro.key || pick(song, 'key', 'defaultKey', 'originalKey');
@@ -348,6 +355,16 @@ function songFromItem(it, notation) {
 }
 
 // ---------- ChordPro ----------
+
+/** Rückfall: irgendwo im Eintrag nach einem Text suchen, der wie ChordPro aussieht (Feldname egal). */
+const LOOKS_PRO = /\[[A-Ha-h][#b]?[^\]\s]{0,10}\]|\{\s*(start_of_|so[cvb]\b|title|key)/;
+function findChordPro(o, depth = 0) {
+  if (o == null || depth > 5) return '';
+  if (typeof o === 'string') return LOOKS_PRO.test(o) ? o : '';
+  if (typeof o !== 'object') return '';
+  for (const v of Array.isArray(o) ? o : Object.values(o)) { const f = findChordPro(v, depth + 1); if (f) return f; }
+  return '';
+}
 
 const DE_HINT = /^(H|h)|^[A-Ha-h](is|es)|^(As|Es|as|es)\b/;
 const isGerman = (sym) => DE_HINT.test(String(sym || '').trim());
