@@ -8,6 +8,7 @@ Eine Web-App fürs iPad (und iPhone), mit der man ohne Vorkenntnisse lernt, Lobp
 
 - **MIDI-Keyboard** (z. B. Roland-Digitalpiano per USB): gedrückte Tasten grün/rot, „✓ Richtig!“, Warte-Modus „Warten bis richtig“. Auf dem iPad im kostenlosen *MIDIWeb Browser* öffnen (Safari kann kein Web MIDI), am Rechner in Chrome.
 
+- **Chara Technics**: Anmeldung mit dem eigenen Konto (OAuth 2.1 + PKCE, öffentlicher Client `olivergentina-github-io`, kein Secret), nächsten Plan oder beliebigen Plan als Setlist laden, Lieder suchen; Akkorde aus ChordPro (`include=chart`, braucht Music-Stand-Freigabe), Tonart/Tempo/Taktart, Transponieren auf die Plan-Tonart. Tokens nur im Gerät (localStorage bzw. sessionStorage, abschaltbar), Erneuerung nie doppelt (gemeinsames Promise + Web Lock über Tabs)
 - **Planning Center**: Anmeldung (OAuth + PKCE, dieselbe registrierte App wie Ambientpad), nächste Veranstaltung oder beliebigen Plan als Setlist laden, Lieder aus der Datenbank suchen; Tonart, Tempo, Taktart und Akkorde aus „Lyrics & Chords“ (inkl. Transponieren und Umrechnung in deutsche Akkordnamen)
 - **Startseite** mit „Setlist aus Planning Center“ und „Zu übende Lieder“ (eigene Liste, „+ Merken“)
 - **Einstellungen** wie in Ambientpad: Menü mit Unterseiten (Planning Center, Klaviatur, Metronom & Gleiten, Klang, Notenschrift, Anleitung, App & Speicher)
@@ -58,6 +59,7 @@ Auf dem iPad: Seite in Safari öffnen → Teilen → „Zum Home-Bildschirm“. 
 | `js/keyboard.js` | Klaviatur, Markierungen, Pfeile, gleitende Fingernummern |
 | `js/app.js` | Ansichten: Start, Lied-Editor, Übungsansicht, Akkord-Bibliothek, Einstellungen |
 | `js/store.js` | Lieder, Setlist und Einstellungen im Browser speichern (localStorage) |
+| `js/chara.js` | Chara Technics: Anmeldung, Token-Erneuerung, Pläne, Setlisten, Liedsuche, ChordPro lesen |
 | `js/pco.js` | Planning Center: Anmeldung, Setlists, Liedsuche, Akkord-Charts lesen |
 | `js/splash.js` | Startbildschirm, Ton freischalten |
 | `js/midi.js` | MIDI-Keyboard lesen, Akkord prüfen |

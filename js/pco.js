@@ -183,46 +183,57 @@ export function songFromArrangement(song, arr, notation) {
 
 // ---------- Umwandlung in ein Übungs-Lied ----------
 
-function meterOf(m) {
+export function meterOf(m) {
   const s = String(m || '').replace(/\s/g, '');
   return ['4/4', '3/4', '6/8'].includes(s) ? s : (s === '12/8' ? '6/8' : '4/4');
 }
 
-/** Erste Tonart aus Angaben wie „G“, „Bb“, „C - D“, „Em“ (englische Schreibweise von Planning Center). */
-function firstKey(name) {
+/** Erste Tonart aus Angaben wie „G“, „Bb“, „C - D“, „Em“ (englische Schreibweise). */
+export function firstKey(name) {
   const m = String(name || '').replace(/♯/g, '#').replace(/♭/g, 'b').match(/[A-G](#|b)?m?/);
   return m ? m[0] : '';
 }
 
 function buildSong({ songId, arrId, title, keyName, arrangement, notation, arrName }) {
   const keyEn = firstKey(keyName) || firstKey(arrangement.chord_chart_key) || '';
-  const chartKeyEn = firstKey(arrangement.chord_chart_key) || keyEn;
-  // Akkord-Chart steht in der Tonart des Charts; der Plan kann eine andere Tonart vorgeben → transponieren
+  return makeSong({
+    id: `pco-${songId || 'x'}-${arrId || 'x'}`, title, keyEn, chartKeyEn: firstKey(arrangement.chord_chart_key) || keyEn,
+    bpm: arrangement.bpm, meter: arrangement.meter, chart: arrangement.chord_chart, notation,
+    source: 'pco', extra: { pco: { songId, arrId, arrName: arrName || '' } },
+  });
+}
+
+/**
+ * Übungs-Lied aus Titel, Tonarten (englisch) und Akkord-Chart bauen. Der Chart steht in `chartKeyEn`;
+ * weicht die gewünschte Tonart `keyEn` ab, wird transponiert. Auch für Chara Technics genutzt.
+ */
+export function makeSong({ id, title, keyEn, chartKeyEn, bpm, meter, chart, notation, source, extra }) {
+  keyEn = firstKey(keyEn) || firstKey(chartKeyEn) || '';
+  chartKeyEn = firstKey(chartKeyEn) || keyEn;
   const kc = parseChord(chartKeyEn, 'en'), kp = parseChord(keyEn, 'en');
   const semis = kc && kp ? ((kp.root - kc.root) + 12) % 12 : 0;
   const keyOut = keyEn ? convertSymbol(keyEn, 'en', notation, prefersFlats(keyEn, 'en')) : '';
   const flats = keyEn ? prefersFlats(keyEn, 'en') : false;
-  const sections = parseChordChart(arrangement.chord_chart || '').map((sec) => ({
+  const sections = parseChordChart(chart || '').map((sec) => ({
     name: sec.name,
     chords: sec.chords.map((c) => convertSymbol(c, 'en', notation, flats, semis > 6 ? semis - 12 : semis)).join(' '),
   }));
-  const bpm = Math.round(+arrangement.bpm || 0) || 72;
-  return {
-    id: `pco-${songId || 'x'}-${arrId || 'x'}`,
+  const b = Math.round(parseFloat(bpm) || 0) || 72;
+  return Object.assign({
+    id,
     title: title || 'Lied',
     key: keyOut || 'C',
-    bpm: Math.max(30, Math.min(200, bpm)),
-    meter: meterOf(arrangement.meter),
+    bpm: Math.max(30, Math.min(200, b)),
+    meter: meterOf(meter),
     sections: sections.length ? sections : [{ name: 'Lied', chords: '' }],
-    source: 'pco',
-    pco: { songId, arrId, arrName: arrName || '' },
+    source,
     noChords: !sections.length,
-  };
+  }, extra || {});
 }
 
 // ---------- „Lyrics & Chords“ lesen ----------
 
-const SECTION_RE = /^\s*(verse|vers|strophe|chorus|refrain|pre[\s-]?chorus|prechorus|bridge|intro|outro|tag|ending|interlude|instrumental|turnaround|vamp|coda|zwischenspiel|ende|post[\s-]?chorus|breakdown|hook)\b[^\n]{0,20}$/i;
+const SECTION_RE = /^\s*(teil|verse|vers|strophe|chorus|refrain|pre[\s-]?chorus|prechorus|bridge|intro|outro|tag|ending|interlude|instrumental|turnaround|vamp|coda|zwischenspiel|ende|post[\s-]?chorus|breakdown|hook)\b[^\n]{0,20}$/i;
 const IGNORE_RE = /^\s*(COLUMN_BREAK|PAGE_BREAK|\{.*\})\s*$/i;
 const CHORD_TOKEN = /^[A-G](#|b)?(m|maj|min|dim|aug|sus|add|\+|°|-)?[0-9]*(sus[24]?|add[0-9]+|maj[0-9]*|[0-9])*(\/[A-G](#|b)?)?$/;
 

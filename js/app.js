@@ -6,6 +6,7 @@ import * as store from './store.js';
 import { VERSION } from './version.js';
 import { initSplash } from './splash.js';
 import * as pco from './pco.js';
+import * as chara from './chara.js';
 import { MidiInput, checkChord } from './midi.js';
 import { CameraView, listCameras, cameraSupported } from './camera.js';
 
@@ -85,6 +86,8 @@ function openSettings(onChange, startPage = 'main', extra = {}) {
 
   const pages = {
     main: { title: 'Einstellungen', html: () => `
+      <button class="mrow feature" data-go="chara"><span class="mi">⛪</span><span class="mt"><b>Chara Technics</b>
+        <small>${chara.isConnected() ? `Angemeldet${chara.userName() ? ' als ' + esc(chara.userName()) : ''} · Pläne & Lieder` : 'Pläne, Setlisten und Lieder mit Akkorden'}</small></span><span class="mc">›</span></button>
       <button class="mrow feature" data-go="pco"><span class="mi">🎵</span><span class="mt"><b>Planning Center</b>
         <small>${pco.isConnected() ? `Verbunden${pco.userName() ? ' als ' + esc(pco.userName()) : ''} · Setlist & Lieder` : 'Setlist laden, Lieder holen'}</small></span><span class="mc">›</span></button>
       <div class="menu">
@@ -97,6 +100,23 @@ function openSettings(onChange, startPage = 'main', extra = {}) {
         <a class="mrow" href="anleitung.html"><span class="mi">📖</span><span class="mt"><b>Anleitung</b><small>Schritt für Schritt mit Bildern</small></span><span class="mc">›</span></a>
         <button class="mrow" data-go="app"><span class="mi">ⓘ</span><span class="mt"><b>App &amp; Speicher</b><small>Version ${VERSION}</small></span><span class="mc">›</span></button>
       </div>` },
+
+    chara: { title: 'Chara Technics', html: () => `
+      <p>${chara.isConnected() ? `Angemeldet${chara.userName() ? ' als <b>' + esc(chara.userName()) + '</b>' : ''}.` : 'Noch nicht angemeldet. Jeder meldet sich mit seinem eigenen Chara-Technics-Konto an und sieht genau das, was er auch in Chara Technics sehen darf. Die App liest nur, sie ändert nichts.'}</p>
+      <div class="group">
+        <button class="btn primary big" data-chara="next">⚡ Nächsten Plan laden</button>
+        <button class="btn" data-chara="plans">Plan auswählen …</button>
+        <button class="btn" data-chara="search">Lied aus Chara Technics holen …</button>
+      </div>
+      ${chara.isConnected() ? '<button class="btn ghost danger" data-chara="logout">Abmelden</button>' : '<button class="btn" data-chara="login">Mit Chara Technics anmelden</button>'}
+      <div class="group"><label class="trow"><input type="checkbox" id="charaPersist" ${chara.persists() ? 'checked' : ''}><span><b>Auf diesem Gerät angemeldet bleiben</b><small>Aus: Die Anmeldung gilt nur, bis die App geschlossen wird – sicherer auf geteilten Geräten.</small></span></label></div>
+      <details><summary>Erweitert</summary>
+        <div class="group">
+          <p class="small muted">Rücksprung-Adresse (redirect_uri):<br><code>${esc(chara.redirectUri())}</code></p>
+          ${chara.isConnected() ? `<div class="row-gap wrap"><button class="btn ghost" data-chara="test">Verbindung testen</button><button class="btn ghost" data-chara="docs">API-Doku kopieren</button></div>
+          <pre class="small muted" id="charaOut" style="white-space:pre-wrap;max-height:12rem;overflow:auto"></pre>` : ''}
+        </div>
+      </details>` },
 
     pco: { title: 'Planning Center', html: () => `
       <p>${pco.isConnected() ? `Verbunden${pco.userName() ? ' als <b>' + esc(pco.userName()) + '</b>' : ''}.` : 'Noch nicht verbunden. Du meldest dich einmal mit deinem Planning-Center-Konto an – die App liest nur Lieder und Setlists, sie ändert nichts.'}</p>
@@ -240,6 +260,23 @@ function openSettings(onChange, startPage = 'main', extra = {}) {
       if (page === 'cam') listCameras().then((l) => { if (l.some((x) => x.label)) { camList = l; if (page === 'cam') render(); } }).catch(() => {});
       return;
     }
+    if (b.dataset.chara) {
+      const a = b.dataset.chara;
+      if (a === 'logout') { chara.disconnect(); render(); return changed(); }
+      if (a === 'login') return chara.login('settings');
+      if (a === 'test' || a === 'docs') {
+        const out = d.querySelector('#charaOut');
+        out.textContent = 'Lade …';
+        const job = a === 'test' ? chara.info().then((j) => JSON.stringify(j, null, 2)) : chara.docs(true);
+        job.then((t) => {
+          out.textContent = a === 'test' ? t : t.slice(0, 1500) + (t.length > 1500 ? ' …' : '');
+          if (a === 'docs') return navigator.clipboard?.writeText(t).then(() => toast('API-Doku kopiert'), () => {});
+        }).catch((e) => { out.textContent = chara.errorText(e); });
+        return;
+      }
+      d.close();
+      return a === 'next' ? loadNextCharaPlan() : a === 'plans' ? openCharaPlanPicker() : openCharaSongSearch();
+    }
     if (b.dataset.pco) {
       const a = b.dataset.pco;
       if (a === 'logout') { pco.disconnect(); render(); return changed(); }
@@ -270,6 +307,7 @@ function openSettings(onChange, startPage = 'main', extra = {}) {
   d.oninput = (e) => {
     if (e.target.id === 'vol') { setSettings({ volume: +e.target.value }); e.target.previousElementSibling.textContent = `Lautstärke · ${Math.round(settings.volume * 100)} %`; changed(); }
     if (e.target.id === 'pcoClient') pco.setClientId(e.target.value);
+    if (e.target.id === 'charaPersist') chara.setPersist(e.target.checked);
     if (e.target.id === 'clickOn') { setSettings({ click: e.target.checked }); changed(); }
     if (e.target.id === 'midiOn') { setSettings({ midi: e.target.checked }); if (e.target.checked) midi.start().then(render); changed(); }
     if (e.target.id === 'midiEcho') { setSettings({ midiEcho: e.target.checked }); changed(); }
@@ -318,7 +356,7 @@ async function applyPlan(row) {
   const sl = await pco.loadPlan(row, settings.notation);
   store.saveSetlist(sl);
   const n = sl.songs.length, nc = sl.songs.filter((s) => s.noChords).length;
-  toast(n ? `Setlist geladen: ${n} Lieder${nc ? ` · ${nc} ohne Akkorde` : ''}` : 'Diese Veranstaltung enthält keine Lieder.');
+  toast(n ? `Setlist geladen: ${n} ${n === 1 ? 'Lied' : 'Lieder'}${nc ? ` · ${nc} ohne Akkorde` : ''}` : 'Diese Veranstaltung enthält keine Lieder.');
   if (!location.hash || location.hash === '#/' || location.hash === '#') viewHome(); else location.hash = '#/';
 }
 
@@ -406,6 +444,90 @@ async function openSongSearch() {
   showSongs('');
 }
 
+// ---------- Chara Technics: Auswahl-Dialoge ----------
+const charaLogin = (afterwards) => { if (chara.isConnected()) return false; chara.login(afterwards); return true; };
+const charaFail = (e, afterwards, el) => {
+  if (e && e.relogin) return chara.login(afterwards);
+  if (el) el.innerHTML = `<p class="muted">${esc(chara.errorText(e))}</p>`; else toast(chara.errorText(e));
+};
+
+async function applyCharaPlan(row) {
+  const sl = await chara.loadPlan(row, settings.notation);
+  store.saveSetlist(sl);
+  const n = sl.songs.length, nc = sl.songs.filter((s) => s.noChords).length;
+  toast(!n ? 'Dieser Plan enthält keine Lieder.'
+    : sl.noChartRight ? `Setlist geladen: ${n} ${n === 1 ? 'Lied' : 'Lieder'} · Akkorde nur mit Music-Stand-Freigabe`
+    : `Setlist geladen: ${n} ${n === 1 ? 'Lied' : 'Lieder'}${nc ? ` · ${nc} ohne Akkorde` : ''}`);
+  if (!location.hash || location.hash === '#/' || location.hash === '#') viewHome(); else location.hash = '#/';
+}
+
+async function loadNextCharaPlan() {
+  if (charaLogin('next')) return;
+  toast('Lade nächsten Plan …');
+  try {
+    const rows = await chara.upcomingPlans(5);
+    if (!rows.length) return toast('Kein kommender Plan gefunden.');
+    await applyCharaPlan(rows[0]);
+  } catch (e) { charaFail(e, 'next'); }
+}
+
+async function openCharaPlanPicker() {
+  if (charaLogin('plans')) return;
+  const d = sheet('Plan aus Chara Technics', `
+    <div class="pick-list" id="planList"><p class="muted">Lade kommende Pläne …</p></div>
+    <div class="group">
+      <label class="field"><span>Oder Link zu einem Plan einfügen</span>
+        <div class="row-gap"><input class="input" id="planLink" placeholder="https://technics.chara.church/…/plans/…" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn primary" data-link>Laden</button></div></label>
+    </div>`);
+  const list = d.querySelector('#planList');
+  d.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-link]'); if (!b) return;
+    b.disabled = true; b.textContent = 'Lade …';
+    try { await applyCharaPlan(await chara.planFromLink(d.querySelector('#planLink').value)); d.close(); }
+    catch (err) { charaFail(err, 'plans'); b.disabled = false; b.textContent = 'Laden'; }
+  });
+  try {
+    const rows = await chara.upcomingPlans(20);
+    list.innerHTML = rows.length ? '' : '<p class="muted">Keine kommenden Pläne gefunden.</p>';
+    rows.forEach((r) => {
+      const b = document.createElement('button');
+      b.className = 'pick';
+      b.innerHTML = `<span><b>${esc(r.date || 'ohne Datum')}</b><small>${esc([r.stName, r.title].filter(Boolean).join(' · '))}${r.count ? ` · ${r.count} Lieder` : ''}</small></span><span class="mc">›</span>`;
+      b.onclick = async () => { b.disabled = true; try { await applyCharaPlan(r); d.close(); } catch (err) { charaFail(err, 'plans'); b.disabled = false; } };
+      list.appendChild(b);
+    });
+  } catch (e) { charaFail(e, 'plans', list); }
+}
+
+async function openCharaSongSearch() {
+  if (charaLogin('search')) return;
+  const d = sheet('Lied aus Chara Technics', `
+    <div class="row-gap"><input class="input" id="songQ" placeholder="Titel oder Autor" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search"><button class="btn primary" data-search>Suchen</button></div>
+    <div class="pick-list" id="songList"><p class="muted">Lade Lieder …</p></div>`);
+  const list = d.querySelector('#songList');
+  const show = async (q) => {
+    list.innerHTML = '<p class="muted">Suche …</p>';
+    try {
+      const { songs, noChartRight } = await chara.searchSongs(q, settings.notation);
+      list.innerHTML = noChartRight ? '<p class="small muted">Akkorde sind nur mit Music-Stand-Freigabe sichtbar – du kannst sie selbst eintragen.</p>' : '';
+      if (!songs.length) list.insertAdjacentHTML('beforeend', '<p class="muted">Nichts gefunden.</p>');
+      songs.forEach((song) => {
+        const saved = store.isSaved(song.id);
+        const row = document.createElement('div');
+        row.className = 'pick static';
+        row.innerHTML = `<span><b>${esc(song.title)}</b><small>${esc([song.chara.author, `Tonart ${song.key}`, `${song.bpm} BPM`].filter(Boolean).join(' · '))}${song.noChords ? ' · <em>keine Akkorde</em>' : ' · ' + song.sections.map((x) => esc(x.name)).join(', ')}</small></span>
+          <span class="row-gap"><button class="btn ${saved ? 'ghost' : 'primary'}" data-add>${saved ? '✓ Gemerkt' : '+ Merken'}</button><button class="btn ghost" data-go>Üben</button></span>`;
+        row.querySelector('[data-add]').onclick = (ev) => { store.upsertSong(song); ev.target.textContent = '✓ Gemerkt'; ev.target.className = 'btn ghost'; toast(`„${song.title}“ steht jetzt in „Zu übende Lieder“`); if (location.hash === '#/' || !location.hash) viewHome(); };
+        row.querySelector('[data-go]').onclick = () => { store.upsertSong(song); d.close(); location.hash = song.noChords ? `#/song/${encodeURIComponent(song.id)}/edit` : `#/song/${encodeURIComponent(song.id)}/practice`; };
+        list.appendChild(row);
+      });
+    } catch (e) { charaFail(e, 'search', list); }
+  };
+  d.querySelector('[data-search]').onclick = () => show(d.querySelector('#songQ').value);
+  d.querySelector('#songQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') show(e.target.value); });
+  show('');
+}
+
 // ---------- Startseite ----------
 function viewHome() {
   if (cleanup) { cleanup(); cleanup = null; } // alte Zuhörer (z. B. MIDI) abmelden, bevor neu gezeichnet wird
@@ -452,8 +574,8 @@ function viewHome() {
 
     ${midiCard()}
 
-    <div class="h2-row"><h2 class="h2">Setlist aus Planning Center ${sl ? `<span class="muted small">${esc(sl.title)}${sl.date ? ' · ' + esc(sl.date) : ''}</span>` : ''}</h2>
-      ${sl ? '<div class="row-gap"><button class="btn ghost" data-act="pco-reload">Aktualisieren</button><button class="btn ghost" data-act="pco-plans">Andere wählen</button></div>' : ''}</div>
+    <div class="h2-row"><h2 class="h2">Setlist${sl ? (sl.source === 'chara' ? ' aus Chara Technics' : ' aus Planning Center') : ''} ${sl ? `<span class="muted small">${esc(sl.title)}${sl.date ? ' · ' + esc(sl.date) : ''}</span>` : ''}</h2>
+      ${sl ? `<div class="row-gap"><button class="btn ghost" data-act="sl-reload">Aktualisieren</button><button class="btn ghost" data-act="${sl.source === 'chara' ? 'chara-plans' : 'pco-plans'}">Andere wählen</button></div>` : ''}</div>
     ${sl ? `
     <ol class="list setlist">
       ${sl.songs.map((s, i) => `<li class="list-item">
@@ -464,9 +586,13 @@ function viewHome() {
         </div></li>`).join('') || '<li class="muted">Diese Veranstaltung enthält keine Lieder.</li>'}
     </ol>` : `
     <section class="card dashed pco-card">
-      <p class="muted">Hol dir die Lieder des nächsten Gottesdienstes – mit Tonart, Tempo und (falls in Planning Center gepflegt) den Akkorden.</p>
+      <p class="muted">Hol dir die Lieder des nächsten Gottesdienstes – mit Tonart, Tempo und (falls gepflegt) den Akkorden.</p>
       <div class="row-gap wrap">
-        <button class="btn primary" data-act="pco-next">⚡ Nächste Veranstaltung laden</button>
+        <button class="btn primary" data-act="chara-next">⚡ Nächster Plan aus Chara Technics</button>
+        <button class="btn ghost" data-act="chara-plans">Plan auswählen …</button>
+      </div>
+      <div class="row-gap wrap">
+        <button class="btn ghost" data-act="pco-next">Aus Planning Center laden</button>
         <button class="btn ghost" data-act="pco-plans">Veranstaltung auswählen …</button>
       </div>
     </section>`}
@@ -479,13 +605,13 @@ function viewHome() {
     </section>` : ''}
 
     <div class="h2-row"><h2 class="h2">Zu übende Lieder</h2>
-      <div class="row-gap"><button class="btn ghost" data-act="pco-search">+ Aus Planning Center</button><a class="btn ghost" href="#/new">+ Lied anlegen</a></div></div>
+      <div class="row-gap"><button class="btn ghost" data-act="chara-search">+ Aus Chara</button><button class="btn ghost" data-act="pco-search">+ Aus Planning Center</button><a class="btn ghost" href="#/new">+ Lied anlegen</a></div></div>
     <ul class="list">
       ${songs.map((s) => `<li class="list-item">
-        <div><span class="li-title">${esc(s.title || 'Ohne Titel')}${s.source === 'pco' ? ' <span class="tag">PCO</span>' : ''}</span>
+        <div><span class="li-title">${esc(s.title || 'Ohne Titel')}${s.source === 'pco' ? ' <span class="tag">PCO</span>' : s.source === 'chara' ? ' <span class="tag">Chara</span>' : ''}</span>
         <span class="muted small">${songMeta(s)}</span></div>
         <div class="row-gap"><a class="btn ghost" href="#/song/${encodeURIComponent(s.id)}/edit">Bearbeiten</a><a class="btn primary" href="#/song/${encodeURIComponent(s.id)}/practice">Üben</a></div>
-      </li>`).join('') || '<li class="muted">Noch keine Lieder – leg eins an oder hol es aus Planning Center.</li>'}
+      </li>`).join('') || '<li class="muted">Noch keine Lieder – leg eins an oder hol es aus Chara Technics oder Planning Center.</li>'}
     </ul>
     <p class="app-footer">Keys2Worship · Version ${VERSION} · <a href="anleitung.html">Anleitung</a></p>
   </div>`;
@@ -508,7 +634,10 @@ function viewHome() {
       case 'pco-next': return loadNextPlan();
       case 'pco-plans': return openPlanPicker();
       case 'pco-search': return openSongSearch();
-      case 'pco-reload': return reloadSetlist();
+      case 'pco-reload': case 'sl-reload': return reloadSetlist();
+      case 'chara-next': return loadNextCharaPlan();
+      case 'chara-plans': return openCharaPlanPicker();
+      case 'chara-search': return openCharaSongSearch();
     }
   };
   const offMidi = midi.on((ev) => { if (ev.type === 'devices' || ev.type === 'state') viewHome(); });
@@ -538,6 +667,12 @@ function midiCard() {
 
 async function reloadSetlist() {
   const sl = store.loadSetlist(); if (!sl) return;
+  if (sl.source === 'chara') {
+    if (charaLogin('reload')) return;
+    toast('Aktualisiere Setlist …');
+    try { await applyCharaPlan(await chara.planFromLink(String(sl.planId))); } catch (e) { charaFail(e, 'reload'); }
+    return;
+  }
   if (needLogin('reload')) return;
   toast('Aktualisiere Setlist …');
   try { await applyPlan(await pco.planFromLink(String(sl.planId))); }
@@ -1159,6 +1294,20 @@ function viewLibrary() {
 // ---------- Start ----------
 window.__k2wStarted = true;
 (async () => {
+  // Rückkehr von der Anmeldung: erst Chara Technics prüfen, sonst Planning Center
+  const c = await chara.handleRedirect();
+  if (c) {
+    if (c.back && c.back !== location.hash) location.hash = c.back;
+    route();
+    if (!c.ok) { toast(c.error); return openSettings(null, 'chara'); }
+    toast(`Mit Chara Technics angemeldet${chara.userName() ? ' als ' + chara.userName() : ''}`);
+    if (c.afterwards === 'next') loadNextCharaPlan();
+    else if (c.afterwards === 'plans') openCharaPlanPicker();
+    else if (c.afterwards === 'search') openCharaSongSearch();
+    else if (c.afterwards === 'reload') reloadSetlist();
+    else openSettings(null, 'chara');
+    return;
+  }
   const r = await pco.handleRedirect();
   route();
   if (!r) return;
