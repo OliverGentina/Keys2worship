@@ -1,11 +1,14 @@
 // Klaviatur mit Fingersatz-Markierungen, Bewegungspfeilen, gleitenden Fingernummern,
 // Zoom (bis echte Tastengröße) und mitlaufendem Ausschnitt.
+import { movesBetween } from './music.js';
 
 export const FINGER = {
   dark:   { 1: '#C2410C', 2: '#15803D', 3: '#1D4ED8', 4: '#7E22CE', 5: '#BE185D' },
   tint:   { 1: '#FFE4D3', 2: '#D7F5E1', 3: '#DCE6FF', 4: '#F0E1FF', 5: '#FFDDEB' },
   bright: { 1: '#FB923C', 2: '#4ADE80', 3: '#60A5FA', 4: '#C084FC', 5: '#F472B6' },
 };
+
+const LH_MARKER = 4; // Marker 0–3: Finger der rechten Hand, 4: linke Hand
 const LH = { dark: '#334155', tint: '#CBD5E1', bright: '#94A3B8' };
 
 /** Breite einer weißen Taste am echten Klavier (Oktave ≈ 165 mm). */
@@ -83,7 +86,7 @@ export class Keyboard {
     this.pillLayer = el('div', 'kb-layer', this.overlay);
     this.ghostLayer = el('div', 'kb-layer', this.overlay);
     this.markerLayer = el('div', 'kb-layer', this.overlay);
-    this.markers = [0, 1, 2, 3].map((i) => el('div', 'kb-marker' + (i === 3 ? ' lh' : ''), this.markerLayer));
+    this.markers = [0, 1, 2, 3, 4].map((i) => el('div', 'kb-marker' + (i === LH_MARKER ? ' lh' : ''), this.markerLayer));
     this.layout();
   }
 
@@ -264,18 +267,22 @@ export class Keyboard {
     // Gleitende Fingernummern: ein Marker pro Stimme, damit er von Taste zu Taste wandern kann
     const ms = instant || !glide ? 0 : Math.max(0, dur || 0);
     const trans = ms ? `transform ${ms}ms cubic-bezier(.45,.05,.35,1), background-color ${ms}ms, color ${ms}ms, border-color ${ms}ms, box-shadow ${ms}ms` : 'none';
+    // Stimmen: pro Finger des aktuellen Griffs, dazu Finger, die beim nächsten Akkord neu dazukommen (3 ↔ 4 Töne)
+    const mv = cur && next ? movesBetween(cur, next) : (cur ? cur.notes.map((m, i) => ({ from: m, to: m, finger: cur.fingers[i], fingerFrom: cur.fingers[i] })) : []);
     this.markers.forEach((mk, i) => {
-      const isLH = i === 3;
-      const visible = aids && cur && (isLH ? lhOn : showRH);
+      const isLH = i === LH_MARKER;
+      const v = isLH ? null : mv[i];
+      const visible = aids && cur && (isLH ? lhOn : showRH && v && (!v.add || (glide && next)));
       if (!visible) { mk.style.display = 'none'; return; }
       mk.style.display = '';
-      const from = isLH ? cur.bass : cur.notes[i];
-      const to = next ? (isLH ? next.bass : next.notes[i]) : from;
+      const from = isLH ? cur.bass : v.from;
+      const to = next ? (isLH ? next.bass : v.to) : from;
       const m = glide && next ? to : from;
-      const f = isLH ? null : (glide && next ? next.fingers[i] : cur.fingers[i]);
+      const f = isLH ? null : (glide && next ? v.finger : (v.fingerFrom ?? v.finger));
       const p = this.markerPos(m);
       mk.style.transition = trans;
       mk.style.transform = `translate(${p.x}px, ${p.y}px)`;
+      mk.style.opacity = !isLH && glide && v.lift ? '0' : ''; // Finger hebt ab
       mk.textContent = isLH ? 'L' : String(f);
       const dark = isLH ? LH.dark : FINGER.dark[f];
       const onBlack = isBlack(m);
@@ -295,10 +302,7 @@ export class Keyboard {
         this.ghost(m, String(next.fingers[i]), FINGER.dark[next.fingers[i]], glide);
       });
       if (lhOn && next.bass !== cur.bass && this.inRange(next.bass)) this.ghost(next.bass, 'L', LH.dark, glide);
-      if (!glide && showRH) cur.notes.forEach((m, i) => {
-        if (next.notes[i] !== m) return;
-        this.pill(m);
-      });
+      if (!glide && showRH) movesBetween(cur, next).forEach((v) => { if (!v.add && !v.lift && v.delta === 0) this.pill(v.from); });
       if (!glide && lhOn && next.bass === cur.bass) this.pill(cur.bass);
     }
 
@@ -341,7 +345,7 @@ export class Keyboard {
       chip.textContent = label;
       Object.assign(chip.style, { left: (x1 - 10) + 'px', top: (top - 8.5) + 'px', background: col });
     };
-    if (showRH) for (let i = 0; i < 3; i++) arrow(cur.notes[i], next.notes[i], FINGER.bright[next.fingers[i]], String(next.fingers[i]), i);
+    if (showRH) movesBetween(cur, next).forEach((v, i) => { if (!v.lift) arrow(v.from, v.to, FINGER.bright[v.finger], String(v.finger), i % 3); });
     if (showLH && this.inRange(cur.bass) && this.inRange(next.bass)) arrow(cur.bass, next.bass, LH.bright, 'L', showRH ? 1 : 1);
   }
 

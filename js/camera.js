@@ -6,6 +6,7 @@
 // oder von Hand). Daraus berechnet eine Perspektiv-Abbildung, wo jede Taste im Bild liegt.
 
 import { FINGER, isBlack } from './keyboard.js';
+import { movesBetween } from './music.js';
 
 const WHITE_OF = { 0: 0, 2: 1, 4: 2, 5: 3, 7: 4, 9: 5, 11: 6 };
 const whiteAbs = (m) => Math.floor(m / 12) * 7 + WHITE_OF[((m % 12) + 12) % 12];
@@ -247,7 +248,10 @@ export class CameraView {
     const t = glide && next ? Math.min(1, (performance.now() - this.glideStart) / Math.max(1, dur || 1)) : 0;
     const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     const voices = [];
-    if (showRH) cur.notes.forEach((m, i) => voices.push({ from: m, to: next ? next.notes[i] : m, f: cur.fingers[i], f2: next ? next.fingers[i] : cur.fingers[i], lh: false }));
+    if (showRH) {
+      if (next) movesBetween(cur, next).forEach((v) => { if (!v.lift && !(v.add && !glide)) voices.push({ from: v.from, to: v.to, f: v.fingerFrom ?? v.finger, f2: v.finger, lh: false }); });
+      else cur.notes.forEach((m, i) => voices.push({ from: m, to: m, f: cur.fingers[i], f2: cur.fingers[i], lh: false }));
+    }
     if (showLH) voices.push({ from: cur.bass, to: next ? next.bass : cur.bass, f: 'L', f2: 'L', lh: true });
 
     const showAids = aids && cam.aids !== false && next;

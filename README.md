@@ -8,6 +8,7 @@ Eine Web-App fürs iPad (und iPhone), mit der man ohne Vorkenntnisse lernt, Lobp
 
 - **MIDI-Keyboard** (z. B. Roland-Digitalpiano per USB): gedrückte Tasten grün/rot, „✓ Richtig!“, Warte-Modus „Warten bis richtig“. Auf dem iPad im kostenlosen *MIDIWeb Browser* öffnen (Safari kann kein Web MIDI), am Rechner in Chrome.
 
+- **Vierklänge**: 7, maj7, m7, add9, 9, 6, 7sus4 (auch „Gsus7“), Worship-„2“-Akkorde (G2 = sus2, Em2 = Em add9), m7b5, dim7. Rechte Hand greift bis zu vier Töne mit 1–2–3–5, 1–2–4–5 oder 1–3–4–5; liegende Töne behalten ihren Finger, „Finger kommt dazu / hebt ab“ wird angezeigt
 - **Chara Technics**: Anmeldung mit dem eigenen Konto (OAuth 2.1 + PKCE, öffentlicher Client `olivergentina-github-io`, kein Secret), nächsten Plan oder beliebigen Plan als Setlist laden, Lieder suchen; Akkorde aus ChordPro (`include=chart`, braucht Music-Stand-Freigabe), Tonart/Tempo/Taktart, Transponieren auf die Plan-Tonart. Tokens nur im Gerät (localStorage bzw. sessionStorage, abschaltbar), Erneuerung nie doppelt (gemeinsames Promise + Web Lock über Tabs)
 - **Planning Center**: Anmeldung (OAuth + PKCE, dieselbe registrierte App wie Ambientpad), nächste Veranstaltung oder beliebigen Plan als Setlist laden, Lieder aus der Datenbank suchen; Tonart, Tempo, Taktart und Akkorde aus „Lyrics & Chords“ (inkl. Transponieren und Umrechnung in deutsche Akkordnamen)
 - **Startseite** mit „Setlist aus Planning Center“ und „Zu übende Lieder“ (eigene Liste, „+ Merken“)

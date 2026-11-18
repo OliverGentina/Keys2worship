@@ -556,7 +556,7 @@ function viewHome() {
       const k = a.symbol + '>' + b.symbol;
       if (plan.length < 2 || a.symbol === b.symbol || seen.has(k)) continue;
       seen.add(k);
-      const stay = movesBetween(a, b).filter((m) => m.delta === 0).length;
+      const stay = movesBetween(a, b).filter((m) => m.delta === 0 && !m.lift && !m.add).length;
       pairs.push({ i, label: `${a.symbol} → ${b.symbol}`, note: stay ? `${stay} ${stay === 1 ? 'Finger bleibt' : 'Finger bleiben'} liegen` : 'alle Finger rutschen' });
     }
     pairs = pairs.slice(0, 4);
@@ -1091,7 +1091,7 @@ function viewPractice(id, q) {
     $('#nextName').textContent = next.symbol;
     // Bewegungen
     const mv = movesBetween(cur, next);
-    const moving = mv.filter((m) => m.delta !== 0).length, stay = 3 - moving;
+    const moving = mv.filter((m) => m.delta !== 0 || m.add || m.lift).length, stay = mv.length - moving;
     $('#movesTitle').textContent = `So wechselst du: ${cur.symbol} → ${next.symbol}`;
     $('#movesSummary').textContent = settings.hand === 'links'
       ? (next.bass === cur.bass ? 'Linke Hand bleibt liegen' : 'Linke Hand wechselt den Grundton')
@@ -1102,6 +1102,9 @@ function viewPractice(id, q) {
       return `<div class="mv"><span class="dot lh">L</span><span class="mv-t">Linke Hand: ${noteName(cur.bass, notation, flats)} → ${noteName(next.bass, notation, flats)}</span><span class="small muted">${k} ${k === 1 ? 'Taste' : 'Tasten'} nach ${d > 0 ? 'rechts' : 'links'} · kleiner Finger</span></div>`;
     };
     $('#moves').innerHTML = aids ? (showRH ? mv : []).map((m) => {
+      if (m.lift) return `<div class="mv"><span class="dot" style="background:${FINGER.bright[m.fingerFrom]}">${m.fingerFrom}</span><span class="mv-t">${FINGER_NAMES[m.fingerFrom]} hebt ab</span><span class="small muted">${noteName(m.from, notation, flats)} loslassen</span></div>`;
+      if (m.add) return `<div class="mv"><span class="dot" style="background:${FINGER.bright[m.finger]}">${m.finger}</span><span class="mv-t">${FINGER_NAMES[m.finger]} kommt dazu: ${noteName(m.to, notation, flats)}</span><span class="small muted">neu greifen</span></div>`;
+      if (m.delta === 0 && m.finger !== m.fingerFrom) return `<div class="mv"><span class="dot" style="background:${FINGER.bright[m.finger]}">${m.finger}</span><span class="mv-t">Fingerwechsel auf ${noteName(m.from, notation, flats)}: ${FINGER_NAMES[m.finger]} statt ${FINGER_NAMES[m.fingerFrom]}</span><span class="small muted">Taste bleibt</span></div>`;
       if (m.delta === 0) return `<div class="mv"><span class="dot" style="background:${FINGER.bright[m.fingerFrom]}">${m.fingerFrom}</span><span class="mv-t">${FINGER_NAMES[m.fingerFrom]} bleibt auf ${noteName(m.from, notation, flats)}</span><span class="small accent-text">nicht bewegen</span></div>`;
       const k = Math.abs(m.delta);
       const sub = `${k} ${k === 1 ? 'Taste' : 'Tasten'} nach ${m.delta > 0 ? 'rechts' : 'links'}${m.fingerFrom !== m.finger ? ` · statt Finger ${m.fingerFrom}` : ''}`;
@@ -1236,12 +1239,17 @@ function viewPractice(id, q) {
 }
 
 // ---------- Akkord-Bibliothek ----------
+const BLACK_PC = [1, 3, 6, 8, 10];
+const whiteBelow = (m) => (BLACK_PC.includes(m % 12) ? m - 1 : m);
+const whiteAbove = (m) => (BLACK_PC.includes(m % 12) ? m + 1 : m);
 function viewLibrary() {
   document.title = 'Akkorde – Keys2Worship';
   const notation = settings.notation;
   const L = { root: 7, q: 'dur' };
-  const Q = { dur: ['Dur', [0, 4, 7], ''], moll: ['Moll', [0, 3, 7], 'm'], sus2: ['sus2', [0, 2, 7], 'sus2'], sus4: ['sus4', [0, 5, 7], 'sus4'], dim: ['vermindert', [0, 3, 6], 'dim'] };
-  const TITLES = ['Grundstellung', '1. Umkehrung', '2. Umkehrung'];
+  const Q = { dur: ['Dur', [0, 4, 7], ''], moll: ['Moll', [0, 3, 7], 'm'], two: ['2 / sus2', [0, 2, 7], '2'], sus4: ['sus4', [0, 5, 7], 'sus4'],
+    add9: ['add9', [0, 4, 7, 2], 'add9'], d7: ['7', [0, 4, 7, 10], '7'], maj7: ['maj7', [0, 4, 7, 11], 'maj7'], m7: ['m7', [0, 3, 7, 10], 'm7'],
+    sus7: ['7sus4', [0, 5, 7, 10], '7sus4'], dim: ['vermindert', [0, 3, 6], 'dim'] };
+  const TITLES = ['Grundstellung', '1. Umkehrung', '2. Umkehrung', '3. Umkehrung'];
   let kbs = [];
 
   const render = () => {
@@ -1249,9 +1257,9 @@ function viewLibrary() {
     const flats = [5, 10, 3, 8, 1].includes(L.root);
     const pcs = Q[L.q][1].map((x) => (L.root + x) % 12);
     const label = noteName(L.root, notation, flats) + Q[L.q][2];
-    const voicings = [0, 1, 2].map((k) => {
+    const voicings = pcs.map((_, k) => k).map((k) => {
       const c = candidateVoicings(pcs).filter((v) => v.inversion === k);
-      c.sort((a, b) => Math.abs(a.notes[1] - 62) - Math.abs(b.notes[1] - 62));
+      c.sort((a, b) => Math.abs(a.notes[1] - 62) - Math.abs(b.notes[1] - 62)); // Lage nahe der Mitte
       const v = c[0];
       return v ? { k, notes: v.notes, fingers: fingering(v.notes) } : null;
     }).filter(Boolean);
@@ -1282,10 +1290,10 @@ function viewLibrary() {
         </div>`).join('')}
       </div>
       <section class="card"><span class="eyebrow accent">Merkregel Fingersatz</span>
-        <p class="muted">Wo die Lücke zwischen zwei Tönen größer ist, bleibt ein Finger frei: große Lücke oben → 1 – 2 – 5, große Lücke unten → 1 – 3 – 5. Welche Lage du im Lied spielst, sucht die Übungsansicht automatisch nach dem kürzesten Weg aus.</p></section>
+        <p class="muted">Wo die Lücke zwischen zwei Tönen größer ist, bleibt ein Finger frei: große Lücke oben → 1 – 2 – 5, große Lücke unten → 1 – 3 – 5. Vierklänge (7, maj7, add9 …) greifst du meist mit 1 – 2 – 3 – 5, liegen die oberen Töne eng beieinander, mit 1 – 2 – 4 – 5. Welche Lage du im Lied spielst, sucht die Übungsansicht automatisch nach dem kürzesten Weg aus.</p></section>
     </div>`;
     voicings.forEach((v, i) => {
-      const k = new Keyboard($('#mk' + i), { lo: 48, hi: 76, arrows: false, labels: false, onKey: tapNote, keyName: (m) => noteLabel(m, notation, flats) });
+      const k = new Keyboard($('#mk' + i), { lo: whiteBelow(v.notes[0] - 2), hi: whiteAbove(v.notes[v.notes.length - 1] + 2), arrows: false, labels: false, onKey: tapNote, keyName: (m) => noteLabel(m, notation, flats) });
       k.update({ cur: { notes: v.notes, fingers: v.fingers, bass: 0 }, next: null, aids: true, showLH: false });
       kbs.push(k);
     });
